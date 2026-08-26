@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: selfdev-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: selfdev
+      POSTGRES_PASSWORD: selfdev
+      POSTGRES_DB: selfdev
+    volumes:
+      - selfdev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U selfdev -d selfdev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  selfdev_pgdata:
