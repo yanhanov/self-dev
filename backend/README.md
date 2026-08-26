@@ -6,20 +6,39 @@ Rust API (Axum + SQLx) with **PostgreSQL**.
 
 Relational data fits this product well: goals, skill levels, learning paths, steps, users, and progress are naturally linked. PostgreSQL gives constraints, enums, and easy querying for the 4×4 matrix.
 
-## Quick start
+## Quick start (Docker — recommended)
+
+From the project root:
 
 ```bash
-# 1. Start database
-docker compose up -d
+docker compose up -d --build
+```
 
-# 2. Configure env
+This starts PostgreSQL and the API. Migrations run automatically on backend startup.
+
+- API: `http://localhost:3000`
+- DB: `localhost:5432` (user/password/db: `selfdev`)
+
+```bash
+curl http://localhost:3000/health
+curl "http://localhost:3000/api/paths?goal=career_change&level=complete_beginner"
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+## Local development (without Docker for backend)
+
+```bash
+docker compose up -d db
 cp .env.example .env
-
-# 3. Run API (applies migrations on startup)
 cargo run
 ```
 
-Server: `http://localhost:3000`
+Use `DATABASE_URL=postgres://selfdev:selfdev@localhost:5432/selfdev` in `.env`.
 
 ## API
 

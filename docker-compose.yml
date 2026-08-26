@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: selfdev-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://selfdev:selfdev@db:5432/selfdev
+      HOST: 0.0.0.0
+      PORT: 3000
+      RUST_LOG: selfdev_backend=info,tower_http=info,sqlx=warn
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   selfdev_pgdata:

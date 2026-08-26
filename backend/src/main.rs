@@ -5,7 +5,6 @@ mod models;
 mod routes;
 
 use axum::Router;
-use sqlx::PgPool;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;

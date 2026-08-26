@@ -21,6 +21,7 @@ pub struct SkillLevel {
     pub description: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, FromRow)]
 pub struct Resource {
     pub id: Uuid,
