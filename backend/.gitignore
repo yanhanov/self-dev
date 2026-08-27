@@ -1,1 +1,3 @@
+# Local overrides — root .gitignore covers most paths
 .env
+target/

@@ -1,6 +1,8 @@
+#[derive(Clone)]
 pub struct Config {
     pub database_url: String,
     pub port: u16,
+    pub ai_service_url: String,
 }
 
 impl Config {
@@ -11,6 +13,8 @@ impl Config {
             port: std::env::var("PORT")
                 .unwrap_or_else(|_| "3000".into())
                 .parse()?,
+            ai_service_url: std::env::var("AI_SERVICE_URL")
+                .unwrap_or_else(|_| "http://localhost:3001".into()),
         })
     }
 }

@@ -1,0 +1,66 @@
+# ── Env / secrets ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# ── OS / IDE ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Logs / temp ────────────────────────────────────────────────
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.pnpm-debug.log*
+tmp/
+temp/
+*.tmp
+
+# ── Node (front + ai-service) ──────────────────────────────────
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+.turbo/
+.cache/
+
+# ── Expo / React Native (front) ────────────────────────────────
+.expo/
+**/.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+**/expo-env.d.ts
+.metro-health-check*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.kotlin/
+front/ios/
+front/android/
+
+# ── Rust (backend) ─────────────────────────────────────────────
+target/
+**/target/
+**/*.rs.bk
+Cargo.toml.orig
+
+# ── Docker / local data ────────────────────────────────────────
+*.pid
+docker-data/
+
+# ── TypeScript ─────────────────────────────────────────────────
+*.tsbuildinfo

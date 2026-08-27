@@ -17,6 +17,31 @@ services:
       timeout: 5s
       retries: 5
 
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: selfdev-ai
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      USE_MOCK_AI: ${USE_MOCK_AI:-true}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -29,9 +54,12 @@ services:
       DATABASE_URL: postgres://selfdev:selfdev@db:5432/selfdev
       HOST: 0.0.0.0
       PORT: 3000
+      AI_SERVICE_URL: http://ai-service:3001
       RUST_LOG: selfdev_backend=info,tower_http=info,sqlx=warn
     depends_on:
       db:
+        condition: service_healthy
+      ai-service:
         condition: service_healthy
 
 volumes:

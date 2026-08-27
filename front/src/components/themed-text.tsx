@@ -1,10 +1,10 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
+import { Fonts, Palette, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: 'default' | 'title' | 'brand' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'label';
   themeColor?: ThemeColor;
 };
 
@@ -17,12 +17,14 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         { color: theme[themeColor ?? 'text'] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
+        type === 'brand' && styles.brand,
         type === 'small' && styles.small,
         type === 'smallBold' && styles.smallBold,
         type === 'subtitle' && styles.subtitle,
         type === 'link' && styles.link,
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
+        type === 'label' && styles.label,
         style,
       ]}
       {...rest}
@@ -32,42 +34,71 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 
 const styles = StyleSheet.create({
   small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
+    fontFamily: Fonts.serif,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
   },
   smallBold: {
+    fontFamily: Fonts.sans,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 700,
+    fontWeight: '700',
   },
   default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    lineHeight: 26,
+    fontWeight: '400',
+  },
+  brand: {
+    fontFamily: Fonts.sans,
+    fontSize: Platform.select({ web: 72, default: 56 }),
+    fontWeight: '800',
+    lineHeight: Platform.select({ web: 72, default: 58 }),
+    letterSpacing: -2,
   },
   title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
+    fontFamily: Fonts.sans,
+    fontSize: Platform.select({ web: 40, default: 32 }),
+    fontWeight: '700',
+    lineHeight: Platform.select({ web: 44, default: 36 }),
+    letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
+    fontFamily: Fonts.sans,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+  },
+  label: {
+    fontFamily: Fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   link: {
-    lineHeight: 30,
-    fontSize: 14,
+    fontFamily: Fonts.sans,
+    lineHeight: 24,
+    fontSize: 15,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    textDecorationColor: Palette.accent,
   },
   linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
+    fontFamily: Fonts.sans,
+    lineHeight: 24,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Palette.accent,
   },
   code: {
     fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
+    fontWeight: Platform.select({ android: '700' }) ?? '500',
     fontSize: 12,
+    letterSpacing: 0.2,
   },
 });

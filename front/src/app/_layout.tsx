@@ -1,18 +1,33 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { Palette } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const SelfDevTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: Palette.accent,
+    background: Palette.paper,
+    card: Palette.surface,
+    text: Palette.ink,
+    border: Palette.line,
+    notification: Palette.accent,
+  },
+};
+
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={SelfDevTheme}>
       <AnimatedSplashOverlay />
-      <AppTabs />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Palette.paper } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" options={{ presentation: 'card' }} />
+        <Stack.Screen name="lesson/[id]" options={{ presentation: 'card' }} />
+      </Stack>
     </ThemeProvider>
   );
 }

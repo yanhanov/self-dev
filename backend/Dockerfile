@@ -1,12 +1,22 @@
+# syntax=docker/dockerfile:1.7
+
 FROM rust:1-bookworm AS builder
 
 WORKDIR /app
 
+# 1) Cache dependency downloads separately from app code
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src \
+    && echo 'fn main() {}' > src/main.rs \
+    && cargo build --release \
+    && rm -rf src
+
+# 2) Real sources — only this layer rebuilds on code changes
 COPY src ./src
 COPY migrations ./migrations
 
-RUN cargo build --release
+RUN touch src/main.rs \
+    && cargo build --release
 
 FROM debian:bookworm-slim
 

@@ -17,7 +17,11 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
-    let migrations = ["001_initial_schema.sql", "002_seed_data.sql"];
+    let migrations = [
+        "001_initial_schema.sql",
+        "002_seed_data.sql",
+        "003_ai_learning.sql",
+    ];
 
     for name in migrations {
         let applied: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = $1)")
