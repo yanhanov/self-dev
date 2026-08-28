@@ -58,7 +58,8 @@ pub async fn get_lesson(
 
     let blocks = sqlx::query_as::<_, LessonBlock>(
         r#"
-        SELECT id, lesson_id, block_type::text AS block_type, content_markdown, order_index
+        SELECT id, lesson_id, block_type::text AS block_type, content_markdown, order_index,
+               COALESCE(source_refs, '[]'::jsonb) AS source_refs
         FROM lesson_blocks
         WHERE lesson_id = $1
         ORDER BY order_index

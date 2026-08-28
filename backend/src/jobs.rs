@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::ai::{
     AiClient, CourseOutlineRequest, DailyPlanGenRequest, LessonGenRequest,
+    VerifiedContextItem,
 };
+use crate::knowledge::{self, MIN_LESSON_CHUNKS};
 
 pub async fn run_course_outline_job(
     pool: PgPool,
@@ -231,6 +233,7 @@ pub async fn generate_lesson_content(
             l.title AS lesson_title,
             l.summary AS lesson_summary,
             c.title AS course_title,
+            c.profession_id,
             p.slug AS profession_slug,
             p.title AS profession_title,
             sl.slug AS level_slug,
@@ -249,6 +252,53 @@ pub async fn generate_lesson_content(
     .fetch_one(pool)
     .await?;
 
+    let chunks = knowledge::retrieve_for_lesson(
+        pool,
+        row.profession_id,
+        &row.lesson_title,
+        &row.lesson_summary,
+        8,
+    )
+    .await?;
+
+    if chunks.len() < MIN_LESSON_CHUNKS {
+        let err_msg = "Недостаточно материала в базе знаний для генерации урока";
+        sqlx::query(
+            r#"
+            UPDATE generation_jobs
+            SET status = 'failed', error = $2, updated_at = now()
+            WHERE id = $1
+            "#,
+        )
+        .bind(job_id)
+        .bind(err_msg)
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            UPDATE lessons SET status = 'locked', updated_at = now() WHERE id = $1
+            "#,
+        )
+        .bind(lesson_id)
+        .execute(pool)
+        .await?;
+        anyhow::bail!("{err_msg}");
+    }
+
+    let verified_context: Vec<VerifiedContextItem> = chunks
+        .iter()
+        .enumerate()
+        .map(|(i, c)| VerifiedContextItem {
+            ref_index: (i + 1) as i32,
+            chunk_id: c.id.to_string(),
+            source_name: c.source_name.clone(),
+            source_url: c.source_url.clone(),
+            document_title: c.document_title.clone(),
+            title: c.title.clone(),
+            content: c.content_text.clone(),
+        })
+        .collect();
+
     let generated = match ai
         .generate_lesson(&LessonGenRequest {
             profession_slug: row.profession_slug,
@@ -259,6 +309,7 @@ pub async fn generate_lesson_content(
             lesson_title: row.lesson_title,
             lesson_summary: row.lesson_summary,
             course_title: row.course_title,
+            verified_context: verified_context.clone(),
         })
         .await
     {
@@ -287,6 +338,31 @@ pub async fn generate_lesson_content(
         }
     };
 
+    // Build source_refs JSON from AI refs mapped back to chunks, or all retrieved chunks
+    let source_refs = if generated.source_refs.is_empty() {
+        serde_json::to_value(knowledge::citations_from_chunks(&chunks))?
+    } else {
+        let mapped: Vec<_> = generated
+            .source_refs
+            .iter()
+            .filter_map(|r| {
+                let idx = (r.ref_index as usize).saturating_sub(1);
+                chunks.get(idx).map(|c| {
+                    let mut cite = c.to_source_ref();
+                    if !r.excerpt.is_empty() {
+                        cite.excerpt = r.excerpt.clone();
+                    }
+                    cite
+                })
+            })
+            .collect();
+        if mapped.is_empty() {
+            serde_json::to_value(knowledge::citations_from_chunks(&chunks))?
+        } else {
+            serde_json::to_value(mapped)?
+        }
+    };
+
     let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM lesson_blocks WHERE lesson_id = $1")
@@ -300,13 +376,16 @@ pub async fn generate_lesson_content(
 
     sqlx::query(
         r#"
-        INSERT INTO lesson_blocks (lesson_id, block_type, content_markdown, order_index)
-        VALUES ($1, 'theory', $2, 1), ($1, 'practice', $3, 2)
+        INSERT INTO lesson_blocks (lesson_id, block_type, content_markdown, order_index, source_refs)
+        VALUES
+            ($1, 'theory', $2, 1, $4),
+            ($1, 'practice', $3, 2, '[]'::jsonb)
         "#,
     )
     .bind(lesson_id)
     .bind(&generated.theory_markdown)
     .bind(&generated.practice_markdown)
+    .bind(&source_refs)
     .execute(&mut *tx)
     .await?;
 
@@ -359,6 +438,7 @@ struct LessonCtx {
     lesson_title: String,
     lesson_summary: String,
     course_title: String,
+    profession_id: Uuid,
     profession_slug: String,
     profession_title: String,
     level_slug: String,
@@ -387,6 +467,7 @@ pub async fn ensure_daily_plan(
     let ctx = sqlx::query_as::<_, DailyCtx>(
         r#"
         SELECT
+            p.id AS profession_id,
             p.slug AS profession_slug,
             p.title AS profession_title,
             sl.slug AS level_slug,
@@ -415,9 +496,9 @@ pub async fn ensure_daily_plan(
     .fetch_all(pool)
     .await?;
 
-    let next_lesson: Option<String> = sqlx::query_scalar(
+    let next_lesson_row = sqlx::query_as::<_, NextLessonRow>(
         r#"
-        SELECT l.title
+        SELECT l.id, l.title
         FROM lessons l
         JOIN courses c ON c.id = l.course_id
         WHERE c.user_id = $1 AND l.status IN ('ready', 'generating', 'in_progress', 'locked')
@@ -429,6 +510,33 @@ pub async fn ensure_daily_plan(
     .fetch_optional(pool)
     .await?;
 
+    let next_lesson_title = next_lesson_row.as_ref().map(|r| r.title.clone());
+    let next_lesson_id = next_lesson_row.as_ref().map(|r| r.id);
+
+    let plan_chunks = knowledge::retrieve_for_lesson(
+        pool,
+        ctx.profession_id,
+        next_lesson_title.as_deref().unwrap_or("daily practice"),
+        "",
+        5,
+    )
+    .await
+    .unwrap_or_default();
+
+    let verified_context: Vec<VerifiedContextItem> = plan_chunks
+        .iter()
+        .enumerate()
+        .map(|(i, c)| VerifiedContextItem {
+            ref_index: (i + 1) as i32,
+            chunk_id: c.id.to_string(),
+            source_name: c.source_name.clone(),
+            source_url: c.source_url.clone(),
+            document_title: c.document_title.clone(),
+            title: c.title.clone(),
+            content: c.content_text.clone(),
+        })
+        .collect();
+
     let plan = ai
         .generate_daily_plan(&DailyPlanGenRequest {
             profession_slug: ctx.profession_slug,
@@ -437,7 +545,8 @@ pub async fn ensure_daily_plan(
             preferred_language: ctx.preferred_language,
             weekly_hours: ctx.weekly_hours as i32,
             completed_lessons: completed,
-            next_lesson_title: next_lesson,
+            next_lesson_title: next_lesson_title.clone(),
+            verified_context,
         })
         .await?;
 
@@ -455,10 +564,11 @@ pub async fn ensure_daily_plan(
     .await?;
 
     for (idx, task) in plan.tasks.iter().enumerate() {
+        let lesson_id = if idx == 0 { next_lesson_id } else { None };
         sqlx::query(
             r#"
-            INSERT INTO daily_tasks (daily_plan_id, order_index, title, description, estimated_minutes)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO daily_tasks (daily_plan_id, order_index, title, description, estimated_minutes, lesson_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
         )
         .bind(plan_id)
@@ -466,6 +576,7 @@ pub async fn ensure_daily_plan(
         .bind(&task.title)
         .bind(&task.description)
         .bind(task.estimated_minutes as i16)
+        .bind(lesson_id)
         .execute(&mut *tx)
         .await?;
     }
@@ -482,9 +593,16 @@ struct ExistingPlan {
 
 #[derive(sqlx::FromRow)]
 struct DailyCtx {
+    profession_id: Uuid,
     profession_slug: String,
     profession_title: String,
     level_slug: String,
     preferred_language: String,
     weekly_hours: i16,
+}
+
+#[derive(sqlx::FromRow)]
+struct NextLessonRow {
+    id: Uuid,
+    title: String,
 }

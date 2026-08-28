@@ -11,14 +11,6 @@ export default function AppTabs() {
         color: Palette.inkSoft,
         selected: { color: Palette.ink },
       }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Главная</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="course">
         <NativeTabs.Trigger.Label>Курс</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

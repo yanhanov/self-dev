@@ -21,6 +21,8 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
         "001_initial_schema.sql",
         "002_seed_data.sql",
         "003_ai_learning.sql",
+        "004_knowledge_base.sql",
+        "005_knowledge_seed.sql",
     ];
 
     for name in migrations {

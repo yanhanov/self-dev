@@ -56,6 +56,7 @@ pub struct LessonBlock {
     pub block_type: String,
     pub content_markdown: String,
     pub order_index: i32,
+    pub source_refs: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, FromRow)]

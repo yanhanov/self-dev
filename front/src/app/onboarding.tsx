@@ -92,7 +92,8 @@ export default function OnboardingScreen() {
   function back() {
     setError(null);
     if (step === 0) {
-      router.back();
+      if (router.canGoBack()) router.back();
+      else router.replace('/course');
       return;
     }
     setStep((s) => (s - 1) as Step);

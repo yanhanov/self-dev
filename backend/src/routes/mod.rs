@@ -3,6 +3,7 @@ mod health;
 mod lessons;
 mod professions;
 mod today;
+mod tutor;
 mod users;
 
 use axum::{
@@ -27,4 +28,6 @@ pub fn api_router() -> Router<AppState> {
             "/api/users/{id}/today/tasks/{task_id}/done",
             put(today::complete_task),
         )
+        .route("/api/users/{id}/tutor/chat", post(tutor::chat))
+        .route("/api/users/{id}/tutor/history", get(tutor::history))
 }

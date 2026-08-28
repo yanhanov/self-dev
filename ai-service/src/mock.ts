@@ -5,6 +5,8 @@ import type {
   DailyPlanResponse,
   LessonRequest,
   LessonResponse,
+  TutorRequest,
+  TutorResponse,
 } from "./types.js";
 
 export function mockCourseOutline(req: CourseOutlineRequest): CourseOutlineResponse {
@@ -103,10 +105,36 @@ export function mockCourseOutline(req: CourseOutlineRequest): CourseOutlineRespo
 export function mockLesson(req: LessonRequest): LessonResponse {
   const lang = req.preferred_language.startsWith("ru") ? "ru" : "en";
   const title = req.lesson_title;
+  const ctx = req.verified_context || [];
+  const sourceBlock =
+    ctx.length > 0
+      ? ctx
+          .slice(0, 3)
+          .map(
+            (c) =>
+              `- **[${c.ref_index}] ${c.source_name}**: ${(c.title || c.content).slice(0, 120)}…`
+          )
+          .join("\n")
+      : "";
+  const sourceRefs = ctx.slice(0, 4).map((c) => ({
+    ref_index: c.ref_index,
+    excerpt: c.content.slice(0, 120),
+  }));
 
   if (lang === "ru") {
+    const grounded =
+      ctx.length > 0
+        ? `\n\n## Проверенные факты\n\n${ctx
+            .slice(0, 3)
+            .map(
+              (c) =>
+                `### ${c.title || c.source_name} [${c.ref_index}]\n\n${c.content.slice(0, 400)}`
+            )
+            .join("\n\n")}\n\n## Источники\n\n${sourceBlock}`
+        : "";
+
     return {
-      theory_markdown: `# ${title}\n\n${req.lesson_summary || "Краткий обзор темы."}\n\n## Зачем это нужно\n\nЭта тема — фундамент для следующих шагов курса **${req.course_title || req.profession_title}**.\n\n## Ключевые идеи\n\n1. Начните с простого примера.\n2. Разберите термины своими словами.\n3. Свяжите теорию с реальным экраном/кодом.\n\n## Мини-чеклист\n\n- Понял(а) базовые понятия\n- Могу объяснить тему за 1 минуту\n- Знаю, где применить на практике`,
+      theory_markdown: `# ${title}\n\n${req.lesson_summary || "Краткий обзор темы."}\n\n## Зачем это нужно\n\nЭта тема — фундамент для следующих шагов курса **${req.course_title || req.profession_title}**.${grounded}\n\n## Мини-чеклист\n\n- Понял(а) базовые понятия\n- Могу объяснить тему за 1 минуту\n- Знаю, где применить на практике`,
       practice_markdown: `## Практика: ${title}\n\n1. Потратьте 25–40 минут на упражнение по теме.\n2. Сделайте небольшой артефакт (страница, компонент, wireframe или прототип).\n3. Запишите 3 вывода: что сработало, что сложно, что повторить завтра.\n\n### Критерий готовности\n\nМожете показать результат и объяснить решения.`,
       quiz: [
         {
@@ -143,11 +171,24 @@ export function mockLesson(req: LessonRequest): LessonResponse {
           explanation: "Короткий рефлект помогает закрепить прогресс.",
         },
       ],
+      source_refs: sourceRefs,
+      insufficient_context: ctx.length < 3,
     };
   }
 
+  const groundedEn =
+    ctx.length > 0
+      ? `\n\n## Verified facts\n\n${ctx
+          .slice(0, 3)
+          .map(
+            (c) =>
+              `### ${c.title || c.source_name} [${c.ref_index}]\n\n${c.content.slice(0, 400)}`
+          )
+          .join("\n\n")}\n\n## Sources\n\n${sourceBlock}`
+      : "";
+
   return {
-    theory_markdown: `# ${title}\n\n${req.lesson_summary || "Topic overview."}\n\n## Why it matters\n\nThis lesson builds the foundation for **${req.course_title || req.profession_title}**.\n\n## Key ideas\n\n1. Start with a simple example.\n2. Explain terms in your own words.\n3. Connect theory to a real screen/code artifact.\n\n## Checklist\n\n- Understand core concepts\n- Explain the topic in 1 minute\n- Know where to apply it`,
+    theory_markdown: `# ${title}\n\n${req.lesson_summary || "Topic overview."}\n\n## Why it matters\n\nThis lesson builds the foundation for **${req.course_title || req.profession_title}**.${groundedEn}\n\n## Checklist\n\n- Understand core concepts\n- Explain the topic in 1 minute\n- Know where to apply it`,
     practice_markdown: `## Practice: ${title}\n\n1. Spend 25–40 minutes on a focused exercise.\n2. Produce a small artifact (page, component, wireframe, or prototype).\n3. Write 3 takeaways: what worked, what was hard, what to repeat tomorrow.\n\n### Done when\n\nYou can demo the result and explain your decisions.`,
     quiz: [
       {
@@ -184,6 +225,41 @@ export function mockLesson(req: LessonRequest): LessonResponse {
         explanation: "Short reflection locks in progress.",
       },
     ],
+    source_refs: sourceRefs,
+    insufficient_context: ctx.length < 3,
+  };
+}
+
+export function mockTutorAnswer(req: TutorRequest): TutorResponse {
+  const lang = req.preferred_language.startsWith("ru") ? "ru" : "en";
+  const top = req.verified_context.slice(0, 2);
+  const citations = top.map((c) => ({
+    ref_index: c.ref_index,
+    excerpt: c.content.slice(0, 140),
+  }));
+
+  if (lang === "ru") {
+    const body = top
+      .map(
+        (c) =>
+          `**[${c.ref_index}] ${c.source_name}** — ${c.title || "материал"}: ${c.content.slice(0, 280)}`
+      )
+      .join("\n\n");
+    return {
+      answer: `По проверенным материалам:\n\n${body}\n\nЕсли нужен другой аспект темы «${req.lesson_title || "урока"}», уточните вопрос.`,
+      citations,
+    };
+  }
+
+  const body = top
+    .map(
+      (c) =>
+        `**[${c.ref_index}] ${c.source_name}** — ${c.title || "material"}: ${c.content.slice(0, 280)}`
+    )
+    .join("\n\n");
+  return {
+    answer: `Based on verified materials:\n\n${body}\n\nAsk a follow-up if you need another angle on «${req.lesson_title || "this lesson"}».`,
+    citations,
   };
 }
 

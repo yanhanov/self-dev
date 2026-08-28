@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,14 +15,16 @@ import { Atmosphere } from '@/components/ui/atmosphere';
 import { Button } from '@/components/ui/button';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
-import { api, Course, LessonSummary } from '@/lib/api';
+import { api, Course, friendlyError, generationStatusLabel, LessonSummary } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
 export default function CourseScreen() {
   const [course, setCourse] = useState<Course | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const delayRef = useRef(2000);
 
   const load = useCallback(async () => {
     const uid = userId || (await getStoredUserId());
@@ -36,10 +38,11 @@ export default function CourseScreen() {
       setCourse(data);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(friendlyError(e));
       setCourse(null);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [userId]);
 
@@ -52,11 +55,23 @@ export default function CourseScreen() {
     if (course.generation_status === 'ready') return;
     if (course.generation_status === 'failed') return;
 
-    const id = setInterval(() => {
+    const id = setTimeout(() => {
+      delayRef.current = Math.min(delayRef.current * 2, 15000);
       load();
-    }, 2000);
-    return () => clearInterval(id);
+    }, delayRef.current);
+    return () => clearTimeout(id);
   }, [course?.generation_status, load]);
+
+  const nextLesson = useMemo(() => {
+    if (!course) return null;
+    return (
+      course.lessons.find(
+        (l) => l.status === 'ready' || l.status === 'in_progress' || l.status === 'generating'
+      ) ||
+      course.lessons.find((l) => l.status === 'locked') ||
+      null
+    );
+  }, [course]);
 
   if (loading) {
     return (
@@ -79,8 +94,10 @@ export default function CourseScreen() {
     );
   }
 
+  const total = course.total_lessons || course.lessons.length || 1;
   const done = course.lessons.filter((l) => l.status === 'completed').length;
   const generating = course.generation_status !== 'ready';
+  const pct = Math.round((done / total) * 100);
 
   return (
     <Atmosphere>
@@ -88,7 +105,15 @@ export default function CourseScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl refreshing={false} onRefresh={load} tintColor={Palette.accent} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                delayRef.current = 2000;
+                load();
+              }}
+              tintColor={Palette.accent}
+            />
           }>
           <View style={styles.header}>
             <ThemedText type="label" themeColor="textSecondary">
@@ -103,23 +128,44 @@ export default function CourseScreen() {
           <View style={styles.progressBlock}>
             <View style={styles.progressMeta}>
               <ThemedText type="smallBold">
-                {done} / {course.total_lessons || course.lessons.length}
+                {done} из {total} · {pct}%
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {generating ? `AI: ${course.generation_status}` : 'в процессе'}
+                {generating
+                  ? generationStatusLabel(course.generation_status)
+                  : done === total
+                    ? 'курс пройден'
+                    : 'в процессе'}
               </ThemedText>
             </View>
-            <ProgressBar value={done} total={course.total_lessons || course.lessons.length || 1} />
+            <ProgressBar value={done} total={total} />
             {course.generation_status === 'failed' ? (
               <ThemedText type="small" style={styles.error}>
                 Генерация не удалась. Пройдите onboarding ещё раз.
               </ThemedText>
             ) : null}
+            {nextLesson &&
+            (nextLesson.status === 'ready' || nextLesson.status === 'in_progress') ? (
+              <Button
+                label={`Продолжить: ${nextLesson.title}`}
+                onPress={() => router.push(`/lesson/${nextLesson.id}`)}
+              />
+            ) : null}
+          </View>
+
+          <View style={styles.listHeader}>
+            <ThemedText type="label" themeColor="textSecondary">
+              Уроки
+            </ThemedText>
           </View>
 
           <View style={styles.list}>
             {course.lessons.map((lesson) => (
-              <LessonRow key={lesson.id} lesson={lesson} />
+              <LessonRow
+                key={lesson.id}
+                lesson={lesson}
+                isCurrent={nextLesson?.id === lesson.id}
+              />
             ))}
           </View>
         </ScrollView>
@@ -128,24 +174,31 @@ export default function CourseScreen() {
   );
 }
 
-function statusLabel(status: string) {
+function statusMeta(status: string): { label: string; color: string } {
   switch (status) {
     case 'completed':
-      return 'готово';
+      return { label: 'готово', color: Palette.success };
     case 'ready':
     case 'in_progress':
-      return 'открыт';
+      return { label: 'открыт', color: Palette.accent };
     case 'generating':
-      return 'пишем…';
+      return { label: 'пишем…', color: Palette.mint };
     default:
-      return 'скоро';
+      return { label: 'скоро', color: Palette.inkSoft };
   }
 }
 
-function LessonRow({ lesson }: { lesson: LessonSummary }) {
+function LessonRow({
+  lesson,
+  isCurrent,
+}: {
+  lesson: LessonSummary;
+  isCurrent: boolean;
+}) {
   const locked = lesson.status === 'locked' || lesson.status === 'generating';
   const openable =
     lesson.status === 'ready' || lesson.status === 'in_progress' || lesson.status === 'completed';
+  const meta = statusMeta(lesson.status);
 
   return (
     <Pressable
@@ -153,20 +206,25 @@ function LessonRow({ lesson }: { lesson: LessonSummary }) {
       onPress={() => router.push(`/lesson/${lesson.id}`)}
       style={({ pressed }) => [
         styles.lesson,
+        isCurrent && styles.lessonCurrent,
         locked && styles.lessonLocked,
         pressed && openable && styles.lessonPressed,
       ]}>
-      <View style={styles.lessonIndex}>
-        <ThemedText type="smallBold">{String(lesson.order_index).padStart(2, '0')}</ThemedText>
+              <View style={[styles.lessonIndex, isCurrent && styles.lessonIndexCurrent]}>
+        <ThemedText
+          type="smallBold"
+          style={isCurrent ? styles.lessonIndexTextCurrent : undefined}>
+          {String(lesson.order_index).padStart(2, '0')}
+        </ThemedText>
       </View>
       <View style={styles.lessonCopy}>
         <ThemedText type="smallBold">{lesson.title}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
           {lesson.summary}
         </ThemedText>
       </View>
-      <ThemedText type="label" style={styles.lessonStatus}>
-        {statusLabel(lesson.status)}
+      <ThemedText type="label" style={{ color: meta.color, marginTop: 6 }}>
+        {meta.label}
       </ThemedText>
     </Pressable>
   );
@@ -191,9 +249,9 @@ const styles = StyleSheet.create({
   },
   header: { gap: Spacing.two },
   progressBlock: {
-    gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Radius.md,
+    gap: Spacing.three,
+    padding: Spacing.four,
+    borderRadius: Radius.lg,
     backgroundColor: Palette.surface,
     borderWidth: 1,
     borderColor: Palette.line,
@@ -202,6 +260,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
+  },
+  listHeader: {
+    marginTop: Spacing.one,
   },
   list: { gap: Spacing.two },
   lesson: {
@@ -214,6 +276,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Palette.line,
   },
+  lessonCurrent: {
+    borderColor: Palette.accent,
+    backgroundColor: '#FFF8F5',
+  },
   lessonPressed: {
     borderColor: Palette.ink,
   },
@@ -221,15 +287,17 @@ const styles = StyleSheet.create({
   lessonIndex: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFE8E0',
   },
-  lessonCopy: { flex: 1, gap: 4 },
-  lessonStatus: {
-    color: Palette.mint,
-    marginTop: 6,
+  lessonIndexCurrent: {
+    backgroundColor: Palette.accent,
   },
+  lessonIndexTextCurrent: {
+    color: '#fff',
+  },
+  lessonCopy: { flex: 1, gap: 4 },
   error: { color: Palette.danger },
 });

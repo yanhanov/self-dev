@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod error;
 mod jobs;
+mod knowledge;
 mod models;
 mod routes;
 mod state;

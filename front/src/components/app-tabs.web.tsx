@@ -13,7 +13,6 @@ import { ThemedText } from './themed-text';
 import { HeaderInset, MaxContentWidth, Palette, Spacing } from '@/constants/theme';
 
 const LABELS: Record<string, string> = {
-  Home: 'Главная',
   Course: 'Курс',
   Today: 'Сегодня',
 };
@@ -23,9 +22,6 @@ export default function AppTabs() {
     <Tabs>
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
-          </TabTrigger>
           <TabTrigger name="course" href="/course" asChild>
             <TabButton>Course</TabButton>
           </TabTrigger>
@@ -77,7 +73,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Palette.line,
     backgroundColor: 'rgba(244, 241, 232, 0.94)',
-    // @ts-expect-error web backdrop
     backdropFilter: 'blur(12px)',
     minHeight: HeaderInset,
     justifyContent: 'flex-end',
