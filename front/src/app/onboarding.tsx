@@ -7,11 +7,11 @@ import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, Divider } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Choice } from '@/components/ui/choice';
 import { FieldInput } from '@/components/ui/field-input';
 import { Icon } from '@/components/ui/icon';
-import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
+import { Layout, Palette, Radius, Spacing } from '@/constants/theme';
 import { api, friendlyError, Profession, SkillLevel } from '@/lib/api';
 import { setStoredUser } from '@/store/user';
 
@@ -19,11 +19,27 @@ type Step = 0 | 1 | 2;
 
 const HOUR_OPTIONS = [5, 8, 12, 20];
 
-const STEP_COPY: Record<Step, { title: string; hint: string }> = {
-  0: { title: 'Кем вы хотите стать?', hint: 'Выберите направление — курс соберётся под него.' },
-  1: { title: 'Ваш текущий уровень', hint: 'Оцените себя честно, программа подстроится.' },
-  2: { title: 'Контакт и ритм', hint: 'Последний шаг — и можно начинать.' },
-};
+const STEPS: { title: string; hint: string; incomplete: string }[] = [
+  {
+    title: 'Кем вы хотите стать?',
+    hint: 'Выберите направление — программа соберётся под него.',
+    incomplete: 'Выберите направление, чтобы продолжить',
+  },
+  {
+    title: 'Какой у вас уровень?',
+    hint: 'Оцените себя честно — курс подстроится под старт.',
+    incomplete: 'Выберите уровень, чтобы продолжить',
+  },
+  {
+    title: 'Контакт и ритм',
+    hint: 'Последний шаг — сохраним прогресс и рассчитаем нагрузку.',
+    incomplete: 'Укажите email, чтобы собрать курс',
+  },
+];
+
+function isEmailValid(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState<Step>(0);
@@ -53,11 +69,11 @@ export default function OnboardingScreen() {
     [professions, professionSlug]
   );
 
+  const stepComplete =
+    step === 0 ? !!professionSlug : step === 1 ? !!levelSlug : isEmailValid(email);
+
   async function onSubmit() {
-    if (!professionSlug || !levelSlug || !email.trim()) {
-      setError('Заполните email и предыдущие шаги');
-      return;
-    }
+    if (!professionSlug || !levelSlug || !isEmailValid(email)) return;
 
     setSubmitting(true);
     setError(null);
@@ -79,27 +95,20 @@ export default function OnboardingScreen() {
   }
 
   function next() {
+    if (!stepComplete) return;
     setError(null);
-    if (step === 0 && !professionSlug) {
-      setError('Выберите направление');
-      return;
-    }
-    if (step === 1 && !levelSlug) {
-      setError('Выберите уровень');
-      return;
-    }
     if (step < 2) setStep((s) => (s + 1) as Step);
     else onSubmit();
   }
 
   function back() {
     setError(null);
-    if (step === 0) {
-      if (router.canGoBack()) router.back();
-      else router.replace('/course');
+    if (step > 0) {
+      setStep((s) => (s - 1) as Step);
       return;
     }
-    setStep((s) => (s - 1) as Step);
+    if (router.canGoBack()) router.back();
+    else router.replace('/course');
   }
 
   if (loading) {
@@ -115,8 +124,8 @@ export default function OnboardingScreen() {
   return (
     <Atmosphere>
       <SafeAreaView style={styles.safe}>
-        <View style={styles.topBar}>
-          <View style={styles.topInner}>
+        <View style={styles.header}>
+          <View style={styles.headerInner}>
             <View style={styles.brand}>
               <View style={styles.logoMark}>
                 <ThemedText type="metaBold" style={styles.logoText}>
@@ -126,77 +135,68 @@ export default function OnboardingScreen() {
               <ThemedText type="smallBold">SelfDev</ThemedText>
             </View>
             <ThemedText type="meta" themeColor="textSecondary">
-              Шаг {step + 1} из 3
+              Шаг {step + 1} из {STEPS.length}
             </ThemedText>
           </View>
           <View style={styles.stepTrack}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={[styles.stepSeg, i <= step && styles.stepSegOn]} />
+            {STEPS.map((s, i) => (
+              <View key={s.title} style={[styles.stepSeg, i <= step && styles.stepSegOn]} />
             ))}
           </View>
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <Card>
-            <View style={styles.headRow}>
-              <Pressable
-                onPress={back}
-                accessibilityRole="button"
-                accessibilityLabel="Назад"
-                style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}>
-                <Icon name="back" size={18} color={Palette.ink} />
-              </Pressable>
-              <View style={styles.headCopy}>
-                <ThemedText type="title">{STEP_COPY[step].title}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {STEP_COPY[step].hint}
-                </ThemedText>
-              </View>
+          <View style={styles.content}>
+            <View style={styles.intro}>
+              <ThemedText type="title">{STEPS[step].title}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {STEPS[step].hint}
+              </ThemedText>
             </View>
-
-            <Divider style={styles.headDivider} />
 
             {step === 0 ? (
               <View style={styles.stack}>
-                {professions.map((p) => (
-                  <Pressable
-                    key={p.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: professionSlug === p.slug }}
-                    onPress={() => setProfessionSlug(p.slug)}
-                    style={({ pressed }) => [
-                      styles.profession,
-                      professionSlug === p.slug && styles.professionOn,
-                      pressed && styles.pressed,
-                    ]}>
-                    <Avatar
-                      label={p.title}
-                      size={48}
-                      tone={professionSlug === p.slug ? 'brand' : 'neutral'}
-                    />
-                    <View style={styles.professionCopy}>
-                      <ThemedText type="subtitle">{p.title}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {p.description}
-                      </ThemedText>
-                    </View>
-                    {professionSlug === p.slug ? (
-                      <Icon name="checkCircle" size={22} color={Palette.brand} />
-                    ) : null}
-                  </Pressable>
-                ))}
+                {professions.map((p) => {
+                  const selected = professionSlug === p.slug;
+                  return (
+                    <Pressable
+                      key={p.id}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      onPress={() => setProfessionSlug(p.slug)}
+                      style={({ pressed }) => [
+                        styles.option,
+                        selected && styles.optionOn,
+                        pressed && !selected && styles.pressed,
+                      ]}>
+                      <Avatar label={p.title} size={44} tone={selected ? 'brand' : 'neutral'} />
+                      <View style={styles.optionCopy}>
+                        <ThemedText type="subtitle">{p.title}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {p.description}
+                        </ThemedText>
+                      </View>
+                      {selected ? (
+                        <Icon name="checkCircle" size={22} color={Palette.brand} filled />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
 
             {step === 1 ? (
               <View style={styles.stack}>
                 {selectedProfession ? (
-                  <ThemedText type="meta" themeColor="textSecondary">
-                    Направление: {selectedProfession.title}
-                  </ThemedText>
+                  <View style={styles.contextRow}>
+                    <Avatar label={selectedProfession.title} size={32} />
+                    <ThemedText type="meta" themeColor="textSecondary">
+                      Направление: {selectedProfession.title}
+                    </ThemedText>
+                  </View>
                 ) : null}
                 {levels.map((l) => (
                   <Choice
@@ -211,49 +211,60 @@ export default function OnboardingScreen() {
             ) : null}
 
             {step === 2 ? (
-              <View style={styles.stack}>
-                <FieldInput
-                  label="Имя"
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Как к вам обращаться"
-                />
-                <FieldInput
-                  label="Email"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="you@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  hint="Нужен, чтобы сохранить прогресс курса."
-                />
+              <Card>
+                <View style={styles.form}>
+                  <FieldInput
+                    label="Имя"
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Как к вам обращаться"
+                    returnKeyType="next"
+                  />
+                  <FieldInput
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    returnKeyType="done"
+                    onSubmitEditing={next}
+                    hint="Нужен, чтобы сохранить курс и прогресс."
+                    error={
+                      email.length > 0 && !isEmailValid(email) ? 'Проверьте формат email' : undefined
+                    }
+                  />
 
-                <View style={styles.hoursBlock}>
-                  <ThemedText type="meta" themeColor="textSecondary">
-                    Сколько часов в неделю готовы учиться
-                  </ThemedText>
-                  <View style={styles.hoursRow}>
-                    {HOUR_OPTIONS.map((h) => (
-                      <Pressable
-                        key={h}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: weeklyHours === h }}
-                        onPress={() => setWeeklyHours(h)}
-                        style={({ pressed }) => [
-                          styles.hourChip,
-                          weeklyHours === h && styles.hourChipOn,
-                          pressed && styles.pressed,
-                        ]}>
-                        <ThemedText
-                          type="smallBold"
-                          style={weeklyHours === h ? styles.hourTextOn : styles.hourText}>
-                          {h} ч
-                        </ThemedText>
-                      </Pressable>
-                    ))}
+                  <View style={styles.hoursBlock}>
+                    <ThemedText type="meta" themeColor="textSecondary">
+                      Сколько часов в неделю готовы учиться
+                    </ThemedText>
+                    <View style={styles.hoursRow}>
+                      {HOUR_OPTIONS.map((h) => {
+                        const selected = weeklyHours === h;
+                        return (
+                          <Pressable
+                            key={h}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected }}
+                            onPress={() => setWeeklyHours(h)}
+                            style={({ pressed }) => [
+                              styles.hourChip,
+                              selected && styles.hourChipOn,
+                              pressed && !selected && styles.pressed,
+                            ]}>
+                            <ThemedText
+                              type="smallBold"
+                              style={selected ? styles.hourTextOn : styles.hourText}>
+                              {h} ч
+                            </ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </View>
                 </View>
-              </View>
+              </Card>
             ) : null}
 
             {error ? (
@@ -263,17 +274,27 @@ export default function OnboardingScreen() {
                 </ThemedText>
               </View>
             ) : null}
-
-            <Button
-              label={submitting ? 'Собираем курс…' : step === 2 ? 'Собрать мой курс' : 'Далее'}
-              size="lg"
-              fullWidth
-              onPress={next}
-              disabled={submitting}
-              style={styles.submit}
-            />
-          </Card>
+          </View>
         </ScrollView>
+
+        <View style={styles.footer}>
+          <View style={styles.footerInner}>
+            <Button label="Назад" variant="tertiary" size="lg" onPress={back} />
+            <View style={styles.footerRight}>
+              {!stepComplete ? (
+                <ThemedText type="meta" themeColor="textSecondary" style={styles.footerHint}>
+                  {STEPS[step].incomplete}
+                </ThemedText>
+              ) : null}
+              <Button
+                label={submitting ? 'Собираем курс…' : step === 2 ? 'Собрать мой курс' : 'Далее'}
+                size="lg"
+                onPress={next}
+                disabled={submitting || !stepComplete}
+              />
+            </View>
+          </View>
+        </View>
       </SafeAreaView>
     </Atmosphere>
   );
@@ -282,13 +303,13 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topBar: {
+  header: {
     backgroundColor: Palette.surface,
     borderBottomWidth: 1,
     borderBottomColor: Palette.line,
   },
-  topInner: {
-    maxWidth: MaxContentWidth,
+  headerInner: {
+    maxWidth: Layout.mainWidth,
     width: '100%',
     alignSelf: 'center',
     flexDirection: 'row',
@@ -314,7 +335,7 @@ const styles = StyleSheet.create({
   stepTrack: {
     flexDirection: 'row',
     gap: 2,
-    maxWidth: MaxContentWidth,
+    maxWidth: Layout.mainWidth,
     width: '100%',
     alignSelf: 'center',
   },
@@ -324,32 +345,25 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.line,
   },
   stepSegOn: { backgroundColor: Palette.brand },
+  scroll: { flexGrow: 1 },
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.seven,
-    maxWidth: MaxContentWidth,
+    maxWidth: Layout.mainWidth,
     width: '100%',
     alignSelf: 'center',
+    padding: Spacing.four,
+    paddingBottom: Spacing.six,
+    gap: Spacing.four,
   },
-  headRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two,
-  },
-  headCopy: { flex: 1, gap: Spacing.one, paddingTop: Spacing.one },
-  headDivider: { marginVertical: Spacing.four },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -Spacing.two,
-  },
-  iconBtnPressed: { backgroundColor: Palette.surfaceHover },
+  intro: { gap: Spacing.one },
   stack: { gap: Spacing.two },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingBottom: Spacing.one,
+  },
   pressed: { backgroundColor: Palette.surfaceAlt },
-  profession: {
+  option: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
@@ -359,12 +373,13 @@ const styles = StyleSheet.create({
     borderColor: Palette.lineStrong,
     backgroundColor: Palette.surface,
   },
-  professionOn: {
+  optionOn: {
     borderColor: Palette.brand,
     backgroundColor: Palette.brandSoft,
   },
-  professionCopy: { flex: 1, gap: 2 },
-  hoursBlock: { gap: Spacing.two, marginTop: Spacing.two },
+  optionCopy: { flex: 1, gap: 2 },
+  form: { gap: Spacing.four },
+  hoursBlock: { gap: Spacing.two },
   hoursRow: {
     flexDirection: 'row',
     gap: Spacing.two,
@@ -386,11 +401,32 @@ const styles = StyleSheet.create({
   hourText: { color: Palette.inkSoft },
   hourTextOn: { color: Palette.brandDeep },
   errorBox: {
-    marginTop: Spacing.four,
     padding: Spacing.three,
     borderRadius: Radius.xs,
     backgroundColor: Palette.dangerSoft,
   },
   errorText: { color: Palette.danger },
-  submit: { marginTop: Spacing.five },
+  footer: {
+    backgroundColor: Palette.surface,
+    borderTopWidth: 1,
+    borderTopColor: Palette.line,
+  },
+  footerInner: {
+    maxWidth: Layout.mainWidth,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    flexShrink: 1,
+  },
+  footerHint: { flexShrink: 1, textAlign: 'right' },
 });

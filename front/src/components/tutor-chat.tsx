@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -10,20 +12,13 @@ import {
   StyleSheet,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 import { ThemedText } from '@/components/themed-text';
-import { Avatar } from '@/components/ui/avatar';
 import { Icon } from '@/components/ui/icon';
-import {
-  ElevationRaised,
-  Fonts,
-  Palette,
-  Radius,
-  Spacing,
-} from '@/constants/theme';
+import { ElevationRaised, Fonts, Palette, Radius, Spacing } from '@/constants/theme';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { api, friendlyError, TutorCitation } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
@@ -37,9 +32,23 @@ type Message = {
 type Props = {
   lessonId: string;
   lessonTitle?: string;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 };
+
+const NATIVE_DRIVER = Platform.OS !== 'web';
+/** Rounded enough to read as a capsule when empty, still sane when it grows. */
+const FIELD_RADIUS = 22;
+
+/** A brand-tinted glow, so the launcher lifts off the page without a grey box. */
+const LauncherShadow = Platform.select({
+  web: { boxShadow: '0 6px 16px rgba(10, 102, 194, 0.35)' } as object,
+  default: {
+    shadowColor: Palette.brand,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  } as object,
+});
 
 function suggestionsForLesson(title?: string): string[] {
   const t = (title || '').toLowerCase();
@@ -64,27 +73,51 @@ function suggestionsForLesson(title?: string): string[] {
   return ['В чём суть урока?', 'Дай простой пример', 'Какие частые ошибки?'];
 }
 
-export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange }: Props) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const controlled = openProp !== undefined;
-  const open = controlled ? !!openProp : internalOpen;
-  const { width } = useWindowDimensions();
-  const sheetMax = Math.min(560, width);
+/**
+ * Docks itself to the bottom-right of whatever container it is dropped into.
+ * On a wide screen the panel opens in place, leaving the lesson readable
+ * behind it; on a phone it takes over as a bottom sheet.
+ */
+export function TutorChat({ lessonId, lessonTitle }: Props) {
+  const { isCompact } = useBreakpoint();
 
-  function setOpen(next: boolean) {
-    if (!controlled) setInternalOpen(next);
-    onOpenChange?.(next);
-  }
-
+  const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [focused, setFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
+  // Stay mounted through the closing animation.
+  const [mounted, setMounted] = useState(false);
+  const anim = useRef(new Animated.Value(0)).current;
+
   const suggestions = useMemo(() => suggestionsForLesson(lessonTitle), [lessonTitle]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (open) setMounted(true);
+
+    const run = Animated.timing(anim, {
+      toValue: open ? 1 : 0,
+      duration: open ? 200 : 140,
+      easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: NATIVE_DRIVER,
+    });
+    run.start(({ finished }) => {
+      if (finished && !open && !cancelled) setMounted(false);
+    });
+
+    return () => {
+      cancelled = true;
+      run.stop();
+    };
+  }, [open, anim]);
 
   const loadHistory = useCallback(async () => {
     const uid = await getStoredUserId();
@@ -113,7 +146,7 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
   useEffect(() => {
     if (!open) return;
     loadHistory();
-    const t = setTimeout(() => inputRef.current?.focus(), 280);
+    const t = setTimeout(() => inputRef.current?.focus(), 240);
     return () => clearTimeout(t);
   }, [open, loadHistory]);
 
@@ -132,189 +165,371 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  async function send(textOverride?: string) {
+  /** `appendUser` is false when retrying: the question is already in the thread. */
+  const ask = useCallback(
+    async (text: string, appendUser: boolean) => {
+      const uid = await getStoredUserId();
+      if (!uid) {
+        setError('Сначала создайте курс');
+        return;
+      }
+
+      setLastPrompt(text);
+      setError(null);
+      setSending(true);
+      if (appendUser) {
+        setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: text }]);
+      }
+
+      try {
+        const res = await api.tutorChat(uid, text, lessonId);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            content: res.answer,
+            citations: res.citations,
+          },
+        ]);
+      } catch (e) {
+        setError(friendlyError(e));
+      } finally {
+        setSending(false);
+        setTimeout(() => inputRef.current?.focus(), 40);
+      }
+    },
+    [lessonId]
+  );
+
+  function send(textOverride?: string) {
     const text = (textOverride ?? input).trim();
     if (!text || sending) return;
-    const uid = await getStoredUserId();
-    if (!uid) {
-      setError('Сначала создайте курс');
-      return;
-    }
-
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: text }]);
     setInput('');
-    setSending(true);
-    setError(null);
-
-    try {
-      const res = await api.tutorChat(uid, text, lessonId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: res.answer,
-          citations: res.citations,
-        },
-      ]);
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setSending(false);
-      setTimeout(() => inputRef.current?.focus(), 40);
-    }
+    ask(text, true);
   }
 
   const canSend = !!input.trim() && !sending;
+  const hasThread = messages.length > 0;
 
-  return (
-    <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable
-          style={styles.scrim}
-          accessibilityLabel="Закрыть чат"
-          onPress={() => setOpen(false)}
-        />
-
-        <View style={[styles.sheet, { maxWidth: sheetMax }]}>
-          <View style={styles.header}>
-            <Avatar label="AI" size={36} shape="circle" />
-            <View style={styles.headerText}>
-              <ThemedText type="smallBold">Наставник</ThemedText>
-              <ThemedText type="meta" themeColor="textSecondary" numberOfLines={1}>
-                {lessonTitle || 'Отвечает по материалам урока'}
-              </ThemedText>
-            </View>
-            <Pressable
-              onPress={() => setOpen(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть"
-              hitSlop={8}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}>
-              <Icon name="close" size={18} color={Palette.inkSoft} />
-            </Pressable>
+  const conversation = (
+    <>
+      <View style={styles.header}>
+        <AiBadge size={36} />
+        <View style={styles.headerText}>
+          <ThemedText type="smallBold">Наставник</ThemedText>
+          <View style={styles.status}>
+            <View style={styles.statusDot} />
+            <ThemedText type="meta" themeColor="textSecondary" numberOfLines={1}>
+              {lessonTitle || 'Отвечает по материалам урока'}
+            </ThemedText>
           </View>
+        </View>
+        <Pressable
+          onPress={() => setOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть чат"
+          hitSlop={8}
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+          <Icon name="close" size={18} color={Palette.inkSoft} />
+        </Pressable>
+      </View>
 
-          <ScrollView
-            ref={scrollRef}
-            style={styles.thread}
-            contentContainerStyle={styles.threadContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            {loadingHistory && messages.length === 0 ? (
-              <ActivityIndicator color={Palette.brand} style={styles.historySpinner} />
-            ) : null}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.thread}
+        contentContainerStyle={styles.threadContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        {loadingHistory && !hasThread ? (
+          <View style={styles.historyLoading}>
+            <ActivityIndicator color={Palette.brand} />
+          </View>
+        ) : null}
 
-            {!loadingHistory && messages.length === 0 ? (
-              <View style={styles.empty}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Задайте короткий вопрос по уроку — отвечу только по проверенным материалам.
-                </ThemedText>
-                <View style={styles.chips}>
-                  {suggestions.map((s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => send(s)}
-                      disabled={sending}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}>
-                      <ThemedText type="smallBold" style={styles.chipText}>
-                        {s}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
+        {!loadingHistory && !hasThread ? (
+          <View style={styles.empty}>
+            <AiBadge size={52} />
+            <ThemedText type="subtitle" style={styles.centerText}>
+              Спросите про этот урок
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              Отвечаю только по проверенным материалам курса и показываю источники.
+            </ThemedText>
 
-            {messages.map((m) => (
-              <View
-                key={m.id}
-                style={[styles.msgRow, m.role === 'user' ? styles.msgRowUser : styles.msgRowAi]}>
-                <View style={[styles.msg, m.role === 'user' ? styles.msgUser : styles.msgAi]}>
-                  {m.role === 'assistant' ? (
-                    <Markdown style={md}>{m.content}</Markdown>
-                  ) : (
-                    <ThemedText type="small">{m.content}</ThemedText>
-                  )}
+            <View style={styles.chips}>
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s}
+                  onPress={() => send(s)}
+                  disabled={sending}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}>
+                  <ThemedText type="metaBold" style={styles.chipText}>
+                    {s}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
-                  {m.citations?.length ? (
-                    <View style={styles.cites}>
+        {messages.map((m) => {
+          const mine = m.role === 'user';
+          return (
+            <View key={m.id} style={[styles.row, mine ? styles.rowUser : styles.rowAi]}>
+              {!mine ? <AiBadge size={28} /> : null}
+
+              <View style={[styles.bubble, mine ? styles.bubbleUser : styles.bubbleAi]}>
+                {mine ? (
+                  <ThemedText type="small" style={styles.userText}>
+                    {m.content}
+                  </ThemedText>
+                ) : (
+                  <Markdown style={md}>{m.content}</Markdown>
+                )}
+
+                {!mine && m.citations?.length ? (
+                  <View style={styles.cites}>
+                    <ThemedText type="meta" themeColor="textFaint">
+                      Источники
+                    </ThemedText>
+                    <View style={styles.citeList}>
                       {m.citations.map((c, i) => (
                         <Pressable
                           key={`${c.chunk_id}-${i}`}
+                          disabled={!c.url}
                           onPress={() => c.url && Linking.openURL(c.url)}
                           accessibilityRole="link"
+                          accessibilityLabel={`Источник: ${c.source_title}`}
                           style={({ pressed }) => [styles.cite, pressed && styles.citePressed]}>
-                          <Icon name="link" size={13} color={Palette.brand} />
+                          <View style={styles.citeIndex}>
+                            <ThemedText type="meta" style={styles.citeIndexText}>
+                              {i + 1}
+                            </ThemedText>
+                          </View>
                           <ThemedText type="meta" style={styles.citeText} numberOfLines={1}>
                             {c.source_title}
                           </ThemedText>
+                          {c.url ? <Icon name="link" size={12} color={Palette.brand} /> : null}
                         </Pressable>
                       ))}
                     </View>
-                  ) : null}
-                </View>
+                  </View>
+                ) : null}
               </View>
-            ))}
+            </View>
+          );
+        })}
 
-            {sending ? (
-              <View style={[styles.msgRow, styles.msgRowAi]}>
-                <View style={[styles.msg, styles.msgAi, styles.typing]}>
-                  <ActivityIndicator color={Palette.brand} size="small" />
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Ищу в базе знаний…
-                  </ThemedText>
-                </View>
-              </View>
-            ) : null}
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <ThemedText type="small" style={styles.errorText}>
-                  {error}
-                </ThemedText>
-              </View>
-            ) : null}
-          </ScrollView>
-
-          <View style={styles.composer}>
-            <TextInput
-              ref={inputRef}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Напишите сообщение…"
-              placeholderTextColor={Palette.inkFaint}
-              style={styles.input}
-              multiline
-              editable={!sending}
-              accessibilityLabel="Сообщение наставнику"
-              // @ts-expect-error web-only key handling
-              onKeyDown={(e: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
-            <Pressable
-              onPress={() => send()}
-              disabled={!canSend}
-              accessibilityRole="button"
-              accessibilityLabel="Отправить"
-              style={({ pressed }) => [
-                styles.send,
-                !canSend && styles.sendOff,
-                pressed && styles.sendPressed,
-              ]}>
-              <Icon name="send" size={16} color="#fff" />
-            </Pressable>
+        {sending ? (
+          <View style={[styles.row, styles.rowAi]}>
+            <AiBadge size={28} />
+            <View style={[styles.bubble, styles.bubbleAi, styles.typing]}>
+              <TypingDots />
+              <ThemedText type="meta" themeColor="textSecondary">
+                Ищу в базе знаний
+              </ThemedText>
+            </View>
           </View>
+        ) : null}
+
+        {error ? (
+          <View style={styles.errorBox}>
+            <ThemedText type="small" style={styles.errorText}>
+              {error}
+            </ThemedText>
+            {lastPrompt && !sending ? (
+              <Pressable
+                onPress={() => ask(lastPrompt, false)}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.retry, pressed && styles.pressed]}>
+                <Icon name="refresh" size={14} color={Palette.danger} />
+                <ThemedText type="metaBold" style={styles.errorText}>
+                  Повторить
+                </ThemedText>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.composer}>
+        <View style={[styles.field, focused && styles.fieldFocused]}>
+          <TextInput
+            ref={inputRef}
+            value={input}
+            onChangeText={setInput}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="Спросите про урок…"
+            placeholderTextColor={Palette.inkFaint}
+            style={styles.input}
+            multiline
+            editable={!sending}
+            accessibilityLabel="Сообщение наставнику"
+            // @ts-expect-error web-only key handling
+            onKeyDown={(e: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          <Pressable
+            onPress={() => send()}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Отправить"
+            style={({ pressed }) => [
+              styles.send,
+              canSend ? styles.sendOn : styles.sendOff,
+              pressed && canSend && styles.sendPressed,
+            ]}>
+            <Icon
+              name="send"
+              size={16}
+              color={canSend ? '#fff' : Palette.inkFaint}
+              filled={canSend}
+            />
+          </Pressable>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      </View>
+    </>
+  );
+
+  if (isCompact) {
+    return (
+      <>
+        <View style={styles.zoneCompact} pointerEvents="box-none">
+          {!open ? <Launcher compact onPress={() => setOpen(true)} /> : null}
+        </View>
+
+        <Modal
+          visible={mounted}
+          animationType="none"
+          transparent
+          onRequestClose={() => setOpen(false)}>
+          <KeyboardAvoidingView
+            style={styles.sheetRoot}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Animated.View style={[styles.scrim, { opacity: anim }]}>
+              <Pressable
+                style={styles.scrimHit}
+                accessibilityRole="button"
+                accessibilityLabel="Закрыть чат"
+                onPress={() => setOpen(false)}
+              />
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.panel,
+                styles.panelSheet,
+                {
+                  transform: [
+                    {
+                      translateY: anim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [420, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}>
+              <View style={styles.handleZone}>
+                <View style={styles.handle} />
+              </View>
+              {conversation}
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </Modal>
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.zoneDock} pointerEvents="box-none">
+      {mounted ? (
+        <Animated.View
+          style={[
+            styles.panel,
+            styles.panelDock,
+            {
+              opacity: anim,
+              transform: [
+                {
+                  translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
+                },
+                {
+                  scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }),
+                },
+              ],
+            },
+          ]}>
+          {conversation}
+        </Animated.View>
+      ) : (
+        <Launcher onPress={() => setOpen(true)} />
+      )}
+    </View>
+  );
+}
+
+function Launcher({ compact, onPress }: { compact?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Открыть чат с наставником"
+      style={({ pressed }) => [styles.launcher, pressed && styles.launcherPressed]}>
+      <View style={styles.launcherIcon}>
+        <Icon name="sparkle" size={18} color="#fff" filled />
+      </View>
+      <ThemedText type="smallBold" style={styles.launcherText}>
+        {compact ? 'Спросить' : 'Спросить наставника'}
+      </ThemedText>
+      {!compact ? <Icon name="chevronUp" size={16} color="rgba(255, 255, 255, 0.75)" /> : null}
+    </Pressable>
+  );
+}
+
+/** The tutor's identity mark: a brand disc with a sparkle. */
+function AiBadge({ size }: { size: number }) {
+  return (
+    <View style={[styles.aiBadge, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Icon name="sparkle" size={Math.round(size * 0.55)} color="#fff" filled />
+    </View>
+  );
+}
+
+function TypingDots() {
+  const a = useRef(new Animated.Value(0.25)).current;
+  const b = useRef(new Animated.Value(0.25)).current;
+  const c = useRef(new Animated.Value(0.25)).current;
+
+  useEffect(() => {
+    const pulse = (value: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(value, { toValue: 1, duration: 320, useNativeDriver: NATIVE_DRIVER }),
+          Animated.timing(value, { toValue: 0.25, duration: 320, useNativeDriver: NATIVE_DRIVER }),
+          Animated.delay(320 - delay),
+        ])
+      );
+
+    const running = [pulse(a, 0), pulse(b, 160), pulse(c, 320)];
+    running.forEach((r) => r.start());
+    return () => running.forEach((r) => r.stop());
+  }, [a, b, c]);
+
+  return (
+    <View style={styles.dots}>
+      <Animated.View style={[styles.dot, { opacity: a }]} />
+      <Animated.View style={[styles.dot, { opacity: b }]} />
+      <Animated.View style={[styles.dot, { opacity: c }]} />
+    </View>
   );
 }
 
@@ -328,17 +543,22 @@ const md = StyleSheet.create({
   paragraph: { marginTop: 0, marginBottom: 8 },
   strong: { fontWeight: '600' },
   bullet_list: { marginBottom: 6 },
+  ordered_list: { marginBottom: 6 },
   list_item: { marginBottom: 2 },
   code_inline: {
     fontFamily: Fonts.mono as string,
-    backgroundColor: Palette.surfaceAlt,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.line,
     borderRadius: 4,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     fontSize: 13,
   },
   fence: {
     fontFamily: Fonts.mono as string,
-    backgroundColor: Palette.surfaceAlt,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.line,
     padding: 10,
     borderRadius: Radius.xs,
     fontSize: 12,
@@ -348,30 +568,84 @@ const md = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
+  /** Anchored to the host container's bottom-right corner. */
+  zoneCompact: {
+    position: 'absolute',
+    right: Spacing.four,
+    bottom: Spacing.four,
   },
+  zoneDock: {
+    position: 'absolute',
+    right: Spacing.four,
+    bottom: Spacing.four,
+    top: Spacing.four,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+
+  launcher: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingLeft: Spacing.one,
+    paddingRight: Spacing.four,
+    paddingVertical: Spacing.one,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.brand,
+    ...LauncherShadow,
+  },
+  launcherPressed: { backgroundColor: Palette.brandDeep },
+  launcherIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  launcherText: { color: '#fff' },
+
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   scrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
-  /** Docked message panel, like LinkedIn's messaging overlay. */
-  sheet: {
-    width: '100%',
-    maxHeight: '86%',
-    minHeight: '55%',
+  scrimHit: { flex: 1 },
+
+  panel: {
     backgroundColor: Palette.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
     overflow: 'hidden',
     ...ElevationRaised,
   },
+  panelSheet: {
+    width: '100%',
+    maxHeight: '92%',
+    minHeight: '62%',
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+  },
+  panelDock: {
+    width: 380,
+    maxWidth: '100%',
+    height: 560,
+    maxHeight: '100%',
+    borderRadius: Radius.lg,
+  },
+  handleZone: {
+    alignItems: 'center',
+    paddingTop: Spacing.two,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Palette.lineStrong,
+  },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,9 +654,19 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     borderBottomWidth: 1,
     borderBottomColor: Palette.line,
-    backgroundColor: Palette.surface,
   },
   headerText: { flex: 1, gap: 1 },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Palette.success,
+  },
   iconBtn: {
     width: 32,
     height: 32,
@@ -390,98 +674,183 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnPressed: { backgroundColor: Palette.surfaceHover },
-  thread: { flexGrow: 1, backgroundColor: Palette.surface },
+  pressed: { backgroundColor: Palette.surfaceHover },
+
+  aiBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.brand,
+  },
+
+  thread: { flex: 1, backgroundColor: Palette.surface },
   threadContent: {
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    gap: Spacing.two,
+    paddingVertical: Spacing.four,
+    gap: Spacing.three,
     flexGrow: 1,
   },
-  historySpinner: { marginVertical: Spacing.six },
-  empty: { gap: Spacing.four, paddingTop: Spacing.two },
-  chips: { gap: Spacing.two, alignItems: 'flex-start' },
+  historyLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerText: { textAlign: 'center' },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.two,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+  },
   chip: {
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
     borderRadius: Radius.pill,
     borderWidth: 1,
+    borderColor: Palette.lineStrong,
+    backgroundColor: Palette.surface,
+  },
+  chipPressed: {
+    backgroundColor: Palette.brandSoft,
     borderColor: Palette.brand,
   },
-  chipPressed: { backgroundColor: Palette.brandWash },
-  chipText: { color: Palette.brand },
-  msgRow: { flexDirection: 'row' },
-  msgRowUser: { justifyContent: 'flex-end' },
-  msgRowAi: { justifyContent: 'flex-start' },
-  msg: {
-    maxWidth: '88%',
-    paddingVertical: Spacing.two,
+  chipText: { color: Palette.ink },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.two,
+  },
+  rowUser: { justifyContent: 'flex-end' },
+  rowAi: { justifyContent: 'flex-start' },
+  bubble: {
+    flexShrink: 1,
+    maxWidth: '86%',
+    paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.lg,
     gap: Spacing.two,
   },
-  msgUser: {
-    backgroundColor: Palette.brandSoft,
+  bubbleUser: {
+    backgroundColor: Palette.brand,
     borderBottomRightRadius: Radius.xs,
   },
-  msgAi: {
+  bubbleAi: {
     backgroundColor: Palette.surfaceAlt,
     borderBottomLeftRadius: Radius.xs,
   },
+  userText: { color: '#fff' },
+
   cites: {
     gap: Spacing.one,
     borderTopWidth: 1,
-    borderTopColor: Palette.line,
+    borderTopColor: Palette.lineStrong,
     paddingTop: Spacing.two,
   },
+  citeList: { gap: Spacing.one },
   cite: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   citePressed: { opacity: 0.6 },
+  citeIndex: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.brandSoft,
+  },
+  citeIndexText: { color: Palette.brandDeep, fontSize: 10, lineHeight: 14 },
   citeText: { flex: 1, color: Palette.brand },
+
   typing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
+  dots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Palette.brand,
+  },
+
   errorBox: {
+    gap: Spacing.two,
     padding: Spacing.three,
-    borderRadius: Radius.xs,
+    borderRadius: Radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: Palette.danger,
     backgroundColor: Palette.dangerSoft,
   },
   errorText: { color: Palette.danger },
-  composer: {
+  retry: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: Spacing.one,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radius.pill,
+  },
+
+  composer: {
+    padding: Spacing.three,
     borderTopWidth: 1,
     borderTopColor: Palette.line,
     backgroundColor: Palette.surface,
   },
+  /** Filled capsule; the ring only appears on focus, so nothing shifts. */
+  field: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.two,
+    paddingLeft: Spacing.four,
+    paddingRight: Spacing.one,
+    paddingVertical: Spacing.one,
+    borderRadius: FIELD_RADIUS,
+    borderWidth: 1.5,
+    borderColor: Palette.surfaceAlt,
+    backgroundColor: Palette.surfaceAlt,
+  },
+  fieldFocused: {
+    borderColor: Palette.brand,
+    backgroundColor: Palette.surface,
+  },
   input: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    paddingHorizontal: Spacing.three,
+    minHeight: 34,
+    maxHeight: 116,
     paddingVertical: Spacing.two,
-    borderRadius: Radius.lg,
-    backgroundColor: Palette.surfaceAlt,
     color: Palette.ink,
     fontSize: 15,
+    lineHeight: 20,
     fontFamily: Fonts.sans as string,
+    // The capsule already signals focus; drop the browser's second outline.
+    ...(Platform.select({ web: { outlineStyle: 'none' }, default: {} }) as object),
   },
   send: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Palette.brand,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendOn: { backgroundColor: Palette.brand },
+  sendOff: { backgroundColor: 'transparent' },
   sendPressed: { backgroundColor: Palette.brandDeep },
-  sendOff: { opacity: 0.35 },
 });

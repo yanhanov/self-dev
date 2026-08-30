@@ -1,13 +1,15 @@
+import type { ReactElement } from 'react';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { Palette } from '@/constants/theme';
 
 export type IconName =
   | 'home'
-  | 'grid'
-  | 'book'
+  | 'cap'
   | 'chat'
-  | 'back'
+  | 'article'
+  | 'code'
+  | 'quiz'
   | 'check'
   | 'checkCircle'
   | 'lock'
@@ -16,8 +18,370 @@ export type IconName =
   | 'close'
   | 'link'
   | 'sparkle'
+  | 'chevronLeft'
   | 'chevronRight'
+  | 'chevronUp'
+  | 'search'
+  | 'user'
+  | 'calendar'
+  | 'play'
   | 'refresh';
+
+type Ctx = {
+  /** Stroke/fill colour. */
+  c: string;
+  /** Active state: render the purpose-drawn solid variant where one exists. */
+  filled: boolean;
+  /** Stroke width, scaled so small icons stay legible. */
+  sw: number;
+};
+
+/**
+ * Every glyph is drawn on a 24px grid. Solid and outline variants are drawn
+ * separately instead of toggling fill on one path, so active states keep their
+ * interior detail (a door in the house, a gap under the mortarboard) rather
+ * than collapsing into a silhouette.
+ */
+const ICONS: Record<IconName, (ctx: Ctx) => ReactElement> = {
+  home: ({ c, filled, sw }) => {
+    const d = 'M3.6 10.7 12 4l8.4 6.7v9.8h-5.7v-6.1H9.3v6.1H3.6v-9.8Z';
+    return filled ? (
+      <Path d={d} fill={c} />
+    ) : (
+      <Path d={d} fill="none" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
+    );
+  },
+
+  cap: ({ c, filled, sw }) =>
+    filled ? (
+      <>
+        <Path d="M12 3.6 2.4 8.1 12 12.6l9.6-4.5L12 3.6Z" fill={c} />
+        <Path
+          d="M6.8 10.7 12 13.1l5.2-2.4v4.2c0 1.6-2.3 2.9-5.2 2.9s-5.2-1.3-5.2-2.9v-4.2Z"
+          fill={c}
+        />
+        <Path d="M21.6 8.6v5.2" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+      </>
+    ) : (
+      <>
+        <Path
+          d="M12 3.6 2.4 8.1 12 12.6l9.6-4.5L12 3.6Z"
+          fill="none"
+          stroke={c}
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M6.8 10.9v4c0 1.6 2.3 2.9 5.2 2.9s5.2-1.3 5.2-2.9v-4"
+          fill="none"
+          stroke={c}
+          strokeWidth={sw}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path d="M21.6 8.6v5.2" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+      </>
+    ),
+
+  chat: ({ c, filled, sw }) => {
+    const d =
+      'M4.6 3.6h14.8a2.1 2.1 0 0 1 2.1 2.1v8.8a2.1 2.1 0 0 1-2.1 2.1h-9.1l-4.6 3.9v-3.9h-1.1a2.1 2.1 0 0 1-2.1-2.1V5.7a2.1 2.1 0 0 1 2.1-2.1Z';
+    return filled ? (
+      <Path d={d} fill={c} />
+    ) : (
+      <Path d={d} fill="none" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
+    );
+  },
+
+  article: ({ c, sw }) => (
+    <>
+      <Path
+        d="M6.2 3.2h7l5.4 5.2v12.4H6.2V3.2Z"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M13.2 3.4v5.2h5.2"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinejoin="round"
+      />
+      <Path d="M9 12.8h6.4M9 16.4h4.2" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+    </>
+  ),
+
+  code: ({ c }) => (
+    <Path
+      d="M9.4 7.4 4.6 12l4.8 4.6M14.6 7.4 19.4 12l-4.8 4.6"
+      fill="none"
+      stroke={c}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+
+  quiz: ({ c, sw }) => (
+    <>
+      <Path
+        d="M9.2 4.8H7.4a1.8 1.8 0 0 0-1.8 1.8v12.8a1.8 1.8 0 0 0 1.8 1.8h9.2a1.8 1.8 0 0 0 1.8-1.8V6.6a1.8 1.8 0 0 0-1.8-1.8h-1.8"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Rect
+        x={9.2}
+        y={2.6}
+        width={5.6}
+        height={4}
+        rx={1.2}
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+      />
+      <Path
+        d="M8.9 13.6 11.2 15.9 15.5 11.2"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+
+  check: ({ c }) => (
+    <Path
+      d="M4.8 12.6 9.6 17.4 19.2 6.9"
+      fill="none"
+      stroke={c}
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+
+  checkCircle: ({ c, filled, sw }) =>
+    filled ? (
+      <>
+        <Circle cx={12} cy={12} r={9.4} fill={c} />
+        <Path
+          d="M7.9 12.3 10.7 15.1 16.1 9.2"
+          fill="none"
+          stroke="#fff"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    ) : (
+      <>
+        <Circle cx={12} cy={12} r={9.1} fill="none" stroke={c} strokeWidth={sw} />
+        <Path
+          d="M7.9 12.3 10.7 15.1 16.1 9.2"
+          fill="none"
+          stroke={c}
+          strokeWidth={sw}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    ),
+
+  lock: ({ c, filled, sw }) => (
+    <>
+      <Path
+        d="M8.2 10.4V7.6a3.8 3.8 0 0 1 7.6 0v2.8"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+      />
+      {filled ? (
+        <Rect x={4.6} y={10.2} width={14.8} height={10.4} rx={2.4} fill={c} />
+      ) : (
+        <Rect
+          x={4.6}
+          y={10.2}
+          width={14.8}
+          height={10.4}
+          rx={2.4}
+          fill="none"
+          stroke={c}
+          strokeWidth={sw}
+        />
+      )}
+    </>
+  ),
+
+  clock: ({ c, sw }) => (
+    <>
+      <Circle cx={12} cy={12} r={8.8} fill="none" stroke={c} strokeWidth={sw} />
+      <Path
+        d="M12 6.9v5.3l3.4 2"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+
+  send: ({ c, filled, sw }) => {
+    const d = 'M21.4 12 3.1 4.2l2.8 7.8-2.8 7.8L21.4 12Z';
+    return filled ? (
+      <Path d={d} fill={c} />
+    ) : (
+      <>
+        <Path d={d} fill="none" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
+        <Path d="M5.9 12h7.2" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+      </>
+    );
+  },
+
+  close: ({ c }) => (
+    <Path
+      d="M5.8 5.8 18.2 18.2M18.2 5.8 5.8 18.2"
+      fill="none"
+      stroke={c}
+      strokeWidth={2}
+      strokeLinecap="round"
+    />
+  ),
+
+  link: ({ c, sw }) => (
+    <>
+      <Path
+        d="M14 4.4h5.6V10"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M19.6 4.4 11.4 12.6" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+      <Path
+        d="M17.6 13.8v4.4a1.8 1.8 0 0 1-1.8 1.8H5.6a1.8 1.8 0 0 1-1.8-1.8V8a1.8 1.8 0 0 1 1.8-1.8H10"
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+
+  sparkle: ({ c, filled, sw }) => {
+    const d = 'M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z';
+    return filled ? (
+      <Path d={d} fill={c} />
+    ) : (
+      <Path d={d} fill="none" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
+    );
+  },
+
+  chevronLeft: ({ c }) => (
+    <Path
+      d="M15 5.4 8.4 12 15 18.6"
+      fill="none"
+      stroke={c}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+
+  chevronRight: ({ c }) => (
+    <Path
+      d="M9 5.4 15.6 12 9 18.6"
+      fill="none"
+      stroke={c}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+
+  chevronUp: ({ c }) => (
+    <Path
+      d="M5.4 15 12 8.4 18.6 15"
+      fill="none"
+      stroke={c}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+
+  search: ({ c, sw }) => (
+    <>
+      <Circle cx={10.8} cy={10.8} r={6.6} fill="none" stroke={c} strokeWidth={sw} />
+      <Path d="M15.7 15.7 20.4 20.4" stroke={c} strokeWidth={2} strokeLinecap="round" />
+    </>
+  ),
+
+  user: ({ c, filled, sw }) =>
+    filled ? (
+      <>
+        <Circle cx={12} cy={8.4} r={3.9} fill={c} />
+        <Path d="M4.6 20.6a7.4 7.4 0 0 1 14.8 0Z" fill={c} />
+      </>
+    ) : (
+      <>
+        <Circle cx={12} cy={8.4} r={3.9} fill="none" stroke={c} strokeWidth={sw} />
+        <Path
+          d="M4.6 20.6a7.4 7.4 0 0 1 14.8 0"
+          fill="none"
+          stroke={c}
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </>
+    ),
+
+  calendar: ({ c, sw }) => (
+    <>
+      <Rect
+        x={3.4}
+        y={5.2}
+        width={17.2}
+        height={15.4}
+        rx={2.2}
+        fill="none"
+        stroke={c}
+        strokeWidth={sw}
+      />
+      <Path d="M3.4 10h17.2" stroke={c} strokeWidth={sw} />
+      <Path d="M8 3.4v3.4M16 3.4v3.4" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+    </>
+  ),
+
+  play: ({ c, filled, sw }) => {
+    const d = 'M8.2 5.4 19 12 8.2 18.6V5.4Z';
+    return filled ? (
+      <Path d={d} fill={c} />
+    ) : (
+      <Path d={d} fill="none" stroke={c} strokeWidth={sw} strokeLinejoin="round" />
+    );
+  },
+
+  refresh: ({ c, sw }) => (
+    <Path
+      d="M20 12a8 8 0 1 1-2.6-5.9M20 4.2v4.6h-4.6"
+      fill="none"
+      stroke={c}
+      strokeWidth={sw}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+};
 
 type Props = {
   name: IconName;
@@ -26,198 +390,13 @@ type Props = {
   filled?: boolean;
 };
 
-/**
- * Solid-first glyphs at a 24px grid, matching the weight of LinkedIn's icon set.
- * `filled` switches nav glyphs between the active/inactive pair.
- */
-export function Icon({ name, size = 24, color = Palette.ink, filled = true }: Props) {
-  const stroke = color;
-  const fill = filled ? color : 'none';
+export function Icon({ name, size = 24, color = Palette.ink, filled = false }: Props) {
+  // Small glyphs need a proportionally heavier stroke to keep the same optical weight.
+  const strokeWidth = size <= 16 ? 2 : size <= 20 ? 1.85 : 1.7;
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {name === 'home' ? (
-        <Path
-          d="M12 3.2 2.8 10.4V21h6.4v-6.2h5.6V21h6.4V10.4L12 3.2Z"
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={filled ? 0 : 1.8}
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'grid' ? (
-        <>
-          <Rect
-            x={3}
-            y={3}
-            width={7.5}
-            height={7.5}
-            rx={1.6}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={filled ? 0 : 1.8}
-          />
-          <Rect
-            x={13.5}
-            y={3}
-            width={7.5}
-            height={7.5}
-            rx={1.6}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={filled ? 0 : 1.8}
-          />
-          <Rect
-            x={3}
-            y={13.5}
-            width={7.5}
-            height={7.5}
-            rx={1.6}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={filled ? 0 : 1.8}
-          />
-          <Rect
-            x={13.5}
-            y={13.5}
-            width={7.5}
-            height={7.5}
-            rx={1.6}
-            fill={fill}
-            stroke={stroke}
-            strokeWidth={filled ? 0 : 1.8}
-          />
-        </>
-      ) : null}
-
-      {name === 'book' ? (
-        <Path
-          d="M4 4.5h5.2c1.6 0 2.8.9 2.8 2.2V20c0-1.1-1.2-1.9-2.8-1.9H4V4.5Zm16 0h-5.2c-1.6 0-2.8.9-2.8 2.2V20c0-1.1 1.2-1.9 2.8-1.9H20V4.5Z"
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={filled ? 0 : 1.7}
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'chat' ? (
-        <Path
-          d="M12 3c5 0 9 3.4 9 7.7 0 4.2-4 7.6-9 7.6-.9 0-1.7-.1-2.5-.3L4 21l1.3-3.6C3.9 16 3 13.5 3 10.7 3 6.4 7 3 12 3Z"
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={filled ? 0 : 1.7}
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'back' ? (
-        <Path
-          d="M15 4.5 7.5 12l7.5 7.5"
-          stroke={stroke}
-          strokeWidth={2.2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'chevronRight' ? (
-        <Path
-          d="M9 4.5 16.5 12 9 19.5"
-          stroke={stroke}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'check' ? (
-        <Path
-          d="M4.5 12.8 9.3 17.5 19.5 6.8"
-          stroke={stroke}
-          strokeWidth={2.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'checkCircle' ? (
-        <>
-          <Circle cx={12} cy={12} r={9.2} fill={fill} stroke={stroke} strokeWidth={filled ? 0 : 1.8} />
-          <Path
-            d="M7.8 12.4 10.8 15.4 16.4 9"
-            stroke={filled ? '#fff' : stroke}
-            strokeWidth={2.1}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      ) : null}
-
-      {name === 'lock' ? (
-        <>
-          <Rect x={4.5} y={10.5} width={15} height={10} rx={2.2} fill={fill} />
-          <Path
-            d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"
-            stroke={stroke}
-            strokeWidth={2}
-            strokeLinecap="round"
-          />
-        </>
-      ) : null}
-
-      {name === 'clock' ? (
-        <>
-          <Circle cx={12} cy={12} r={8.8} stroke={stroke} strokeWidth={1.8} />
-          <Path
-            d="M12 6.8V12l3.6 2.2"
-            stroke={stroke}
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      ) : null}
-
-      {name === 'send' ? (
-        <Path d="M3 3.6 21.5 12 3 20.4l3.2-8.4L3 3.6Z" fill={fill} />
-      ) : null}
-
-      {name === 'close' ? (
-        <Path
-          d="M5.6 5.6 18.4 18.4M18.4 5.6 5.6 18.4"
-          stroke={stroke}
-          strokeWidth={2.2}
-          strokeLinecap="round"
-        />
-      ) : null}
-
-      {name === 'link' ? (
-        <Path
-          d="M10.5 13.5a3.8 3.8 0 0 0 5.4 0l2.6-2.6a3.8 3.8 0 0 0-5.4-5.4l-1.3 1.3M13.5 10.5a3.8 3.8 0 0 0-5.4 0l-2.6 2.6a3.8 3.8 0 0 0 5.4 5.4l1.3-1.3"
-          stroke={stroke}
-          strokeWidth={1.9}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-
-      {name === 'sparkle' ? (
-        <Path
-          d="M12 2.8 13.9 9 20 10.9 13.9 12.8 12 19 10.1 12.8 4 10.9 10.1 9 12 2.8Z"
-          fill={fill}
-        />
-      ) : null}
-
-      {name === 'refresh' ? (
-        <Path
-          d="M20 12a8 8 0 1 1-2.6-5.9M20 4.2v4.6h-4.6"
-          stroke={stroke}
-          strokeWidth={1.9}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
+      {ICONS[name]({ c: color, filled, sw: strokeWidth })}
     </Svg>
   );
 }

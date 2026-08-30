@@ -2,12 +2,17 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
+import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
-import { Palette } from '@/constants/theme';
+import { Palette, Spacing } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
-/** Entry redirect: existing users → course, new → onboarding */
+/**
+ * Entry redirect. A finished course drops the user straight into the daily
+ * plan; a course still being written lands on the course page where the
+ * generation progress is visible.
+ */
 export default function HomeScreen() {
   useEffect(() => {
     (async () => {
@@ -17,8 +22,8 @@ export default function HomeScreen() {
         return;
       }
       try {
-        await api.getCourse(userId);
-        router.replace('/course');
+        const course = await api.getCourse(userId);
+        router.replace(course.generation_status === 'ready' ? '/today' : '/course');
       } catch {
         router.replace('/onboarding');
       }
@@ -29,6 +34,9 @@ export default function HomeScreen() {
     <Atmosphere>
       <View style={styles.center}>
         <ActivityIndicator color={Palette.brand} />
+        <ThemedText type="small" themeColor="textSecondary">
+          Загружаем ваш прогресс…
+        </ThemedText>
       </View>
     </Atmosphere>
   );
@@ -39,5 +47,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.two,
   },
 });

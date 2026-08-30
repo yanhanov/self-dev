@@ -1,42 +1,71 @@
 import {
   Tabs,
   TabList,
-  TabTrigger,
   TabSlot,
+  TabTrigger,
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from './themed-text';
 
 import { Icon, type IconName } from '@/components/ui/icon';
-import { HeaderInset, MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
+import { Layout, Palette, Radius, Spacing } from '@/constants/theme';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 
 const NAV: Record<string, { label: string; icon: IconName }> = {
-  course: { label: 'Курс', icon: 'book' },
   today: { label: 'Сегодня', icon: 'home' },
+  course: { label: 'Курс', icon: 'cap' },
 };
 
 export default function AppTabs() {
   return (
     <Tabs>
       <TabList asChild>
-        <GlobalNav>
-          <TabTrigger name="course" href="/course" asChild>
-            <NavItem>course</NavItem>
-          </TabTrigger>
+        <GlobalHeader>
           <TabTrigger name="today" href="/today" asChild>
             <NavItem>today</NavItem>
           </TabTrigger>
-        </GlobalNav>
+          <TabTrigger name="course" href="/course" asChild>
+            <NavItem>course</NavItem>
+          </TabTrigger>
+        </GlobalHeader>
       </TabList>
-      <TabSlot style={{ flex: 1, height: '100%' }} />
+      <TabSlot style={styles.slot} />
     </Tabs>
   );
 }
 
-/** Icon-over-label nav item with the active underline pinned to the bar's bottom edge. */
+/**
+ * Full-bleed sticky bar whose inner row is aligned to the same grid as the
+ * page below it, so the logo and content share a left edge.
+ */
+export function GlobalHeader(props: TabListProps) {
+  const { isCompact } = useBreakpoint();
+
+  return (
+    <View {...props} style={styles.bar} pointerEvents="box-none">
+      <View style={styles.inner}>
+        <View style={styles.brand}>
+          <View style={styles.logoMark}>
+            <ThemedText type="metaBold" style={styles.logoText}>
+              SD
+            </ThemedText>
+          </View>
+          {!isCompact ? (
+            <ThemedText type="smallBold" style={styles.wordmark}>
+              SelfDev
+            </ThemedText>
+          ) : null}
+        </View>
+        <View style={styles.nav}>{props.children}</View>
+      </View>
+    </View>
+  );
+}
+
+/** Icon over label, with the active underline pinned to the bar's bottom edge. */
 export function NavItem({ children, isFocused, ...props }: TabTriggerSlotProps) {
   const item = NAV[String(children)] ?? { label: String(children), icon: 'home' as IconName };
   const color = isFocused ? Palette.ink : Palette.inkSoft;
@@ -47,7 +76,7 @@ export function NavItem({ children, isFocused, ...props }: TabTriggerSlotProps) 
       style={({ pressed }) => [styles.navItem, pressed && styles.navItemPressed]}
       accessibilityRole="tab"
       accessibilityState={{ selected: !!isFocused }}>
-      <Icon name={item.icon} size={24} color={color} filled={!!isFocused} />
+      <Icon name={item.icon} size={22} color={color} filled={!!isFocused} />
       <ThemedText type="meta" style={{ color }}>
         {item.label}
       </ThemedText>
@@ -56,46 +85,29 @@ export function NavItem({ children, isFocused, ...props }: TabTriggerSlotProps) 
   );
 }
 
-export function GlobalNav(props: TabListProps) {
-  return (
-    <View {...props} style={styles.bar} pointerEvents="box-none">
-      <View style={styles.inner}>
-        <View style={styles.brand}>
-          <View style={styles.logoMark}>
-            <ThemedText type="metaBold" style={styles.logoText}>
-              SD
-            </ThemedText>
-          </View>
-          <ThemedText type="smallBold" style={styles.wordmark}>
-            SelfDev
-          </ThemedText>
-        </View>
-        <View style={styles.nav}>{props.children}</View>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
+  slot: { flex: 1, height: '100%' },
   bar: {
     zIndex: 20,
-    minHeight: HeaderInset,
+    height: Layout.headerHeight,
     backgroundColor: Palette.surface,
     borderBottomWidth: 1,
     borderBottomColor: Palette.line,
-    justifyContent: 'center',
-    ...({ position: 'sticky', top: 0 } as object),
+    ...Platform.select({
+      web: { position: 'sticky', top: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.06)' } as object,
+      default: {},
+    }),
   },
   inner: {
-    maxWidth: MaxContentWidth,
+    maxWidth: Layout.shellWidth,
     width: '100%',
     alignSelf: 'center',
+    height: '100%',
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
+    paddingLeft: Spacing.four,
     gap: Spacing.four,
-    minHeight: HeaderInset,
   },
   brand: {
     flexDirection: 'row',
@@ -103,42 +115,33 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   logoMark: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: Radius.xs,
     backgroundColor: Palette.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  wordmark: {
-    color: Palette.ink,
-  },
+  logoText: { color: '#fff' },
+  wordmark: { color: Palette.ink },
   nav: {
     flexDirection: 'row',
     alignItems: 'stretch',
   },
   navItem: {
-    minWidth: 80,
+    minWidth: 76,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
-    paddingTop: Spacing.two,
-    paddingHorizontal: Spacing.two,
+    paddingTop: 6,
+    paddingHorizontal: Spacing.three,
   },
-  navItemPressed: {
-    backgroundColor: Palette.surfaceHover,
-  },
+  navItemPressed: { backgroundColor: Palette.surfaceHover },
   underline: {
     height: 2,
     alignSelf: 'stretch',
-    marginTop: 4,
+    marginTop: 5,
     backgroundColor: 'transparent',
   },
-  underlineOn: {
-    backgroundColor: Palette.ink,
-  },
+  underlineOn: { backgroundColor: Palette.ink },
 });

@@ -125,6 +125,23 @@ export const ElevationRaised = Platform.select({
   } as object,
 });
 
-export const HeaderInset = Platform.select({ ios: 56, android: 56, web: 56 }) ?? 56;
+/**
+ * Two-column shell: a sticky rail beside the main column on wide screens,
+ * collapsing to a single centred column below `twoColumnAt`.
+ */
+export const Layout = {
+  /** Outer bound for the header and the page grid. */
+  shellWidth: 1128,
+  /** Main column cap when the layout is a single column. */
+  mainWidth: 640,
+  /** Long-form reading column (lesson content). */
+  readWidth: 760,
+  railWidth: 312,
+  headerHeight: 56,
+  twoColumnAt: 992,
+  compactAt: 768,
+} as const;
+
+export const HeaderInset = Layout.headerHeight;
 export const BottomTabInset = 0;
-export const MaxContentWidth = 700;
+export const MaxContentWidth = Layout.shellWidth;
