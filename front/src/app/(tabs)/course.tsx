@@ -12,7 +12,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, Divider } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
 import { api, Course, friendlyError, generationStatusLabel, LessonSummary } from '@/lib/api';
@@ -77,7 +81,7 @@ export default function CourseScreen() {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={Palette.brand} />
         </View>
       </Atmosphere>
     );
@@ -87,8 +91,11 @@ export default function CourseScreen() {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ThemedText type="small">{error || 'Курс ещё не готов'}</ThemedText>
-          <Button label="Пройти onboarding" onPress={() => router.replace('/onboarding')} />
+          <ThemedText type="subtitle">Курс ещё не готов</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+            {error || 'Пройдите короткую анкету — и мы соберём программу под вас.'}
+          </ThemedText>
+          <Button label="Начать" size="lg" onPress={() => router.replace('/onboarding')} />
         </View>
       </Atmosphere>
     );
@@ -98,10 +105,12 @@ export default function CourseScreen() {
   const done = course.lessons.filter((l) => l.status === 'completed').length;
   const generating = course.generation_status !== 'ready';
   const pct = Math.round((done / total) * 100);
+  const canContinue =
+    nextLesson && (nextLesson.status === 'ready' || nextLesson.status === 'in_progress');
 
   return (
     <Atmosphere>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
@@ -112,120 +121,173 @@ export default function CourseScreen() {
                 delayRef.current = 2000;
                 load();
               }}
-              tintColor={Palette.accent}
+              tintColor={Palette.brand}
             />
           }>
-          <View style={styles.header}>
-            <ThemedText type="label" themeColor="textSecondary">
-              {course.profession_title} · {course.level_title}
-            </ThemedText>
-            <ThemedText type="title">{course.title}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {course.summary}
-            </ThemedText>
-          </View>
-
-          <View style={styles.progressBlock}>
-            <View style={styles.progressMeta}>
-              <ThemedText type="smallBold">
-                {done} из {total} · {pct}%
-              </ThemedText>
+          <Card padded={false}>
+            <View style={styles.cover} />
+            <View style={styles.profile}>
+              <View style={styles.avatarWrap}>
+                <Avatar label={course.profession_title} size={72} />
+              </View>
+              <ThemedText type="title">{course.title}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {generating
-                  ? generationStatusLabel(course.generation_status)
-                  : done === total
-                    ? 'курс пройден'
-                    : 'в процессе'}
+                {course.profession_title} · {course.level_title}
+              </ThemedText>
+              {course.summary ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.summary}>
+                  {course.summary}
+                </ThemedText>
+              ) : null}
+
+              <View style={styles.progressBlock}>
+                <View style={styles.progressMeta}>
+                  <ThemedText type="metaBold" themeColor="textSecondary">
+                    {done} из {total} уроков
+                  </ThemedText>
+                  <ThemedText type="metaBold" style={styles.pct}>
+                    {pct}%
+                  </ThemedText>
+                </View>
+                <ProgressBar value={done} total={total} tone={done === total ? 'success' : 'brand'} />
+              </View>
+
+              {generating ? (
+                <View style={styles.notice}>
+                  <ActivityIndicator size="small" color={Palette.brand} />
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.noticeText}>
+                    {generationStatusLabel(course.generation_status)}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {course.generation_status === 'failed' ? (
+                <View style={[styles.notice, styles.noticeError]}>
+                  <ThemedText type="small" style={styles.errorText}>
+                    Генерация не удалась. Попробуйте пройти анкету ещё раз.
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              <View style={styles.actions}>
+                {canContinue ? (
+                  <Button
+                    label="Продолжить обучение"
+                    size="lg"
+                    onPress={() => router.push(`/lesson/${nextLesson!.id}`)}
+                  />
+                ) : null}
+                <Button
+                  label="Изменить цель"
+                  variant="secondary"
+                  size="lg"
+                  onPress={() => router.push('/onboarding')}
+                />
+              </View>
+            </View>
+          </Card>
+
+          {canContinue ? (
+            <Card padded={false}>
+              <View style={styles.nextHead}>
+                <ThemedText type="metaBold" themeColor="textSecondary">
+                  Следующий шаг
+                </ThemedText>
+              </View>
+              <Divider />
+              <Pressable
+                onPress={() => router.push(`/lesson/${nextLesson!.id}`)}
+                style={({ pressed }) => [styles.nextBody, pressed && styles.rowPressed]}>
+                <View style={styles.nextCopy}>
+                  <ThemedText type="subtitle">{nextLesson!.title}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+                    {nextLesson!.summary}
+                  </ThemedText>
+                </View>
+                <Icon name="chevronRight" size={20} color={Palette.inkSoft} />
+              </Pressable>
+            </Card>
+          ) : null}
+
+          <Card padded={false}>
+            <View style={styles.listHead}>
+              <ThemedText type="subtitle">Программа курса</ThemedText>
+              <ThemedText type="meta" themeColor="textSecondary">
+                {total} уроков
               </ThemedText>
             </View>
-            <ProgressBar value={done} total={total} />
-            {course.generation_status === 'failed' ? (
-              <ThemedText type="small" style={styles.error}>
-                Генерация не удалась. Пройдите onboarding ещё раз.
-              </ThemedText>
-            ) : null}
-            {nextLesson &&
-            (nextLesson.status === 'ready' || nextLesson.status === 'in_progress') ? (
-              <Button
-                label={`Продолжить: ${nextLesson.title}`}
-                onPress={() => router.push(`/lesson/${nextLesson.id}`)}
-              />
-            ) : null}
-          </View>
-
-          <View style={styles.listHeader}>
-            <ThemedText type="label" themeColor="textSecondary">
-              Уроки
-            </ThemedText>
-          </View>
-
-          <View style={styles.list}>
-            {course.lessons.map((lesson) => (
-              <LessonRow
-                key={lesson.id}
-                lesson={lesson}
-                isCurrent={nextLesson?.id === lesson.id}
-              />
+            <Divider />
+            {course.lessons.map((lesson, index) => (
+              <View key={lesson.id}>
+                {index > 0 ? <Divider style={styles.rowDivider} /> : null}
+                <LessonRow lesson={lesson} isCurrent={nextLesson?.id === lesson.id} />
+              </View>
             ))}
-          </View>
+          </Card>
         </ScrollView>
       </SafeAreaView>
     </Atmosphere>
   );
 }
 
-function statusMeta(status: string): { label: string; color: string } {
+function statusMeta(status: string): { label: string; tone: BadgeTone } {
   switch (status) {
     case 'completed':
-      return { label: 'готово', color: Palette.success };
+      return { label: 'Пройден', tone: 'success' };
     case 'ready':
     case 'in_progress':
-      return { label: 'открыт', color: Palette.accent };
+      return { label: 'Доступен', tone: 'brand' };
     case 'generating':
-      return { label: 'пишем…', color: Palette.mint };
+      return { label: 'Готовим', tone: 'warning' };
     default:
-      return { label: 'скоро', color: Palette.inkSoft };
+      return { label: 'Закрыт', tone: 'neutral' };
   }
 }
 
-function LessonRow({
-  lesson,
-  isCurrent,
-}: {
-  lesson: LessonSummary;
-  isCurrent: boolean;
-}) {
-  const locked = lesson.status === 'locked' || lesson.status === 'generating';
+function LessonRow({ lesson, isCurrent }: { lesson: LessonSummary; isCurrent: boolean }) {
   const openable =
     lesson.status === 'ready' || lesson.status === 'in_progress' || lesson.status === 'completed';
+  const completed = lesson.status === 'completed';
   const meta = statusMeta(lesson.status);
 
   return (
     <Pressable
       disabled={!openable}
+      accessibilityRole="button"
       onPress={() => router.push(`/lesson/${lesson.id}`)}
       style={({ pressed }) => [
-        styles.lesson,
-        isCurrent && styles.lessonCurrent,
-        locked && styles.lessonLocked,
-        pressed && openable && styles.lessonPressed,
+        styles.row,
+        isCurrent && styles.rowCurrent,
+        pressed && openable && styles.rowPressed,
       ]}>
-              <View style={[styles.lessonIndex, isCurrent && styles.lessonIndexCurrent]}>
-        <ThemedText
-          type="smallBold"
-          style={isCurrent ? styles.lessonIndexTextCurrent : undefined}>
-          {String(lesson.order_index).padStart(2, '0')}
-        </ThemedText>
+      <View
+        style={[
+          styles.rowIcon,
+          completed && styles.rowIconDone,
+          isCurrent && styles.rowIconCurrent,
+        ]}>
+        {completed ? (
+          <Icon name="check" size={18} color={Palette.success} />
+        ) : openable ? (
+          <ThemedText type="metaBold" style={isCurrent ? styles.rowIndexOn : styles.rowIndex}>
+            {lesson.order_index}
+          </ThemedText>
+        ) : (
+          <Icon name="lock" size={16} color={Palette.inkFaint} />
+        )}
       </View>
-      <View style={styles.lessonCopy}>
-        <ThemedText type="smallBold">{lesson.title}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+
+      <View style={styles.rowCopy}>
+        <ThemedText type="smallBold" style={!openable && styles.rowMuted}>
+          {lesson.title}
+        </ThemedText>
+        <ThemedText type="meta" themeColor="textSecondary" numberOfLines={2}>
           {lesson.summary}
         </ThemedText>
+        <Badge label={meta.label} tone={meta.tone} style={styles.rowBadge} />
       </View>
-      <ThemedText type="label" style={{ color: meta.color, marginTop: 6 }}>
-        {meta.label}
-      </ThemedText>
+
+      {openable ? <Icon name="chevronRight" size={18} color={Palette.inkFaint} /> : null}
     </Pressable>
   );
 }
@@ -237,67 +299,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.three,
-    padding: Spacing.four,
+    padding: Spacing.five,
   },
+  centerText: { textAlign: 'center', maxWidth: 320 },
   content: {
     padding: Spacing.four,
-    gap: Spacing.four,
-    paddingBottom: Spacing.six,
+    gap: Spacing.two,
+    paddingBottom: Spacing.seven,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  header: { gap: Spacing.two },
-  progressBlock: {
-    gap: Spacing.three,
+  cover: {
+    height: 68,
+    backgroundColor: Palette.brand,
+  },
+  profile: {
     padding: Spacing.four,
-    borderRadius: Radius.lg,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
+    paddingTop: 0,
+    gap: Spacing.one,
+  },
+  avatarWrap: {
+    marginTop: -36,
+    marginBottom: Spacing.two,
+    borderWidth: 3,
+    borderColor: Palette.surface,
+    borderRadius: Radius.sm + 3,
+    alignSelf: 'flex-start',
+  },
+  summary: {
+    marginTop: Spacing.one,
+  },
+  progressBlock: {
+    gap: Spacing.two,
+    marginTop: Spacing.four,
   },
   progressMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  pct: { color: Palette.brand },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
+    marginTop: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.xs,
+    backgroundColor: Palette.surfaceAlt,
   },
-  listHeader: {
-    marginTop: Spacing.one,
+  noticeText: { flex: 1 },
+  noticeError: { backgroundColor: Palette.dangerSoft },
+  errorText: { color: Palette.danger, flex: 1 },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.four,
   },
-  list: { gap: Spacing.two },
-  lesson: {
+  nextHead: {
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  nextBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.four,
+  },
+  nextCopy: { flex: 1, gap: Spacing.one },
+  listHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.four,
+  },
+  rowDivider: { marginLeft: 64 },
+  row: {
     flexDirection: 'row',
     gap: Spacing.three,
     alignItems: 'flex-start',
-    padding: Spacing.three,
-    borderRadius: Radius.md,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
   },
-  lessonCurrent: {
-    borderColor: Palette.accent,
-    backgroundColor: '#FFF8F5',
+  rowCurrent: {
+    backgroundColor: Palette.brandSoft,
   },
-  lessonPressed: {
-    borderColor: Palette.ink,
+  rowPressed: {
+    backgroundColor: Palette.surfaceHover,
   },
-  lessonLocked: { opacity: 0.45 },
-  lessonIndex: {
+  rowIcon: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: Radius.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFE8E0',
+    backgroundColor: Palette.surfaceAlt,
   },
-  lessonIndexCurrent: {
-    backgroundColor: Palette.accent,
-  },
-  lessonIndexTextCurrent: {
-    color: '#fff',
-  },
-  lessonCopy: { flex: 1, gap: 4 },
-  error: { color: Palette.danger },
+  rowIconCurrent: { backgroundColor: Palette.brand },
+  rowIconDone: { backgroundColor: Palette.successSoft },
+  rowIndex: { color: Palette.inkSoft },
+  rowIndexOn: { color: '#fff' },
+  rowCopy: { flex: 1, gap: 2 },
+  rowMuted: { color: Palette.inkSoft },
+  rowBadge: { marginTop: Spacing.one },
 });

@@ -5,28 +5,36 @@ import { Palette, Radius } from '@/constants/theme';
 type Props = {
   value: number;
   total: number;
+  tone?: 'brand' | 'success';
 };
 
-export function ProgressBar({ value, total }: Props) {
+export function ProgressBar({ value, total, tone = 'brand' }: Props) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
 
   return (
-    <View style={styles.track}>
-      <View style={[styles.fill, { width: `${pct}%` }]} />
+    <View
+      style={styles.track}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: total, now: value }}>
+      <View
+        style={[
+          styles.fill,
+          { width: `${pct}%`, backgroundColor: tone === 'success' ? Palette.success : Palette.brand },
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   track: {
-    height: 10,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(20,32,28,0.08)',
+    height: 6,
+    borderRadius: Radius.pill,
+    backgroundColor: Palette.surfaceAlt,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: Palette.accent,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.pill,
   },
 });

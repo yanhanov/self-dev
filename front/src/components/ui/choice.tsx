@@ -13,22 +13,20 @@ type Props = {
 export function Choice({ title, subtitle, selected, onPress }: Props) {
   return (
     <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: !!selected }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        selected && styles.selected,
-        pressed && styles.pressed,
-      ]}>
-      <View style={styles.row}>
-        <View style={[styles.dot, selected && styles.dotOn]} />
-        <View style={styles.copy}>
-          <ThemedText type="smallBold">{title}</ThemedText>
-          {subtitle ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              {subtitle}
-            </ThemedText>
-          ) : null}
-        </View>
+      style={({ pressed }) => [styles.base, selected && styles.selected, pressed && styles.pressed]}>
+      <View style={[styles.radio, selected && styles.radioOn]}>
+        {selected ? <View style={styles.radioDot} /> : null}
+      </View>
+      <View style={styles.copy}>
+        <ThemedText type="smallBold">{title}</ThemedText>
+        {subtitle ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {subtitle}
+          </ThemedText>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -36,39 +34,43 @@ export function Choice({ title, subtitle, selected, onPress }: Props) {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: Palette.surface,
-    borderWidth: 1.5,
-    borderColor: Palette.line,
-    borderRadius: Radius.md,
-    padding: Spacing.three,
-  },
-  selected: {
-    borderColor: Palette.ink,
-    backgroundColor: '#FFF4EF',
-  },
-  pressed: {
-    transform: [{ translateY: 1 }],
-  },
-  row: {
     flexDirection: 'row',
     gap: Spacing.three,
     alignItems: 'flex-start',
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.lineStrong,
+    borderRadius: Radius.sm,
+    padding: Spacing.four,
   },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 14,
-    marginTop: 3,
+  selected: {
+    borderColor: Palette.brand,
+    backgroundColor: Palette.brandSoft,
+  },
+  pressed: {
+    backgroundColor: Palette.surfaceAlt,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginTop: 1,
     borderWidth: 1.5,
     borderColor: Palette.inkSoft,
-    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dotOn: {
-    backgroundColor: Palette.accent,
-    borderColor: Palette.accent,
+  radioOn: {
+    borderColor: Palette.brand,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Palette.brand,
   },
   copy: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
 });

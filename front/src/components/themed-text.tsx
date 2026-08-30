@@ -1,10 +1,23 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { Fonts, Palette, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'brand' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'label';
+  type?:
+    | 'default'
+    | 'title'
+    | 'brand'
+    | 'headline'
+    | 'subtitle'
+    | 'small'
+    | 'smallBold'
+    | 'meta'
+    | 'metaBold'
+    | 'link'
+    | 'linkPrimary'
+    | 'code'
+    | 'label';
   themeColor?: ThemeColor;
 };
 
@@ -18,9 +31,12 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'brand' && styles.brand,
+        type === 'headline' && styles.headline,
+        type === 'subtitle' && styles.subtitle,
         type === 'small' && styles.small,
         type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
+        type === 'meta' && styles.meta,
+        type === 'metaBold' && styles.metaBold,
         type === 'link' && styles.link,
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
@@ -33,72 +49,87 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 }
 
 const styles = StyleSheet.create({
-  small: {
-    fontFamily: Fonts.serif,
-    fontSize: 15,
+  default: {
+    fontFamily: Fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
+  },
+  brand: {
+    fontFamily: Fonts.sans,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+  },
+  title: {
+    fontFamily: Fonts.sans,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  headline: {
+    fontFamily: Fonts.sans,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  subtitle: {
+    fontFamily: Fonts.sans,
+    fontSize: 16,
     lineHeight: 22,
+    fontWeight: '600',
+  },
+  small: {
+    fontFamily: Fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '400',
   },
   smallBold: {
     fontFamily: Fonts.sans,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  default: {
-    fontFamily: Fonts.serif,
-    fontSize: 17,
-    lineHeight: 26,
+  meta: {
+    fontFamily: Fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '400',
   },
-  brand: {
+  metaBold: {
     fontFamily: Fonts.sans,
-    fontSize: Platform.select({ web: 72, default: 56 }),
-    fontWeight: '800',
-    lineHeight: Platform.select({ web: 72, default: 58 }),
-    letterSpacing: -2,
-  },
-  title: {
-    fontFamily: Fonts.sans,
-    fontSize: Platform.select({ web: 40, default: 32 }),
-    fontWeight: '700',
-    lineHeight: Platform.select({ web: 44, default: 36 }),
-    letterSpacing: -1,
-  },
-  subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
-    letterSpacing: -0.4,
   },
   label: {
     fontFamily: Fonts.sans,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   link: {
     fontFamily: Fonts.sans,
-    lineHeight: 24,
-    fontSize: 15,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600',
-    textDecorationLine: 'underline',
-    textDecorationColor: Palette.accent,
+    color: Palette.brand,
   },
   linkPrimary: {
     fontFamily: Fonts.sans,
-    lineHeight: 24,
-    fontSize: 15,
-    fontWeight: '700',
-    color: Palette.accent,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: Palette.brand,
   },
   code: {
     fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: '700' }) ?? '500',
     fontSize: 12,
-    letterSpacing: 0.2,
+    lineHeight: 16,
+    fontWeight: '500',
   },
 });

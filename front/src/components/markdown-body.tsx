@@ -14,17 +14,11 @@ export function MarkdownBody({
   emptyText = 'Контент ещё генерируется…',
   bare = false,
 }: Props) {
-  if (!content.trim()) {
-    return (
-      <View style={bare ? undefined : styles.wrap}>
-        <Markdown style={markdownStyles}>{emptyText}</Markdown>
-      </View>
-    );
-  }
+  const body = content.trim() ? content : emptyText;
 
   return (
     <View style={bare ? undefined : styles.wrap}>
-      <Markdown style={markdownStyles}>{content}</Markdown>
+      <Markdown style={markdownStyles}>{body}</Markdown>
     </View>
   );
 }
@@ -32,7 +26,7 @@ export function MarkdownBody({
 const styles = StyleSheet.create({
   wrap: {
     padding: Spacing.four,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     backgroundColor: Palette.surface,
     borderWidth: 1,
     borderColor: Palette.line,
@@ -42,67 +36,86 @@ const styles = StyleSheet.create({
 const markdownStyles = StyleSheet.create({
   body: {
     color: Palette.ink,
-    fontFamily: Fonts.serif as string,
-    fontSize: 16,
-    lineHeight: 26,
+    fontFamily: Fonts.sans as string,
+    fontSize: 15,
+    lineHeight: 24,
   },
   heading1: {
     color: Palette.ink,
     fontFamily: Fonts.sans as string,
-    fontSize: 26,
-    lineHeight: 32,
-    marginBottom: 12,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '600',
+    marginBottom: 8,
     marginTop: 4,
   },
   heading2: {
     color: Palette.ink,
     fontFamily: Fonts.sans as string,
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '600',
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   heading3: {
     color: Palette.ink,
     fontFamily: Fonts.sans as string,
-    fontSize: 17,
+    fontSize: 15,
     lineHeight: 22,
+    fontWeight: '600',
     marginTop: 12,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   paragraph: {
     marginTop: 0,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   bullet_list: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   ordered_list: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   list_item: {
     marginBottom: 4,
   },
+  blockquote: {
+    backgroundColor: Palette.surfaceAlt,
+    borderLeftWidth: 3,
+    borderLeftColor: Palette.brand,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    marginBottom: 12,
+  },
   code_inline: {
-    backgroundColor: Palette.paperAlt,
+    backgroundColor: Palette.surfaceAlt,
     color: Palette.ink,
     fontFamily: Fonts.mono as string,
     borderRadius: 4,
     paddingHorizontal: 4,
+    fontSize: 13,
   },
   fence: {
-    backgroundColor: Palette.paperAlt,
+    backgroundColor: Palette.surfaceAlt,
     borderColor: Palette.line,
-    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderRadius: Radius.xs,
     padding: Spacing.three,
     marginVertical: Spacing.two,
     fontFamily: Fonts.mono as string,
     fontSize: 13,
   },
   link: {
-    color: Palette.accentDeep,
+    color: Palette.brand,
+    fontWeight: '600',
   },
   strong: {
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  hr: {
+    backgroundColor: Palette.line,
+    height: 1,
+    marginVertical: Spacing.three,
   },
 });

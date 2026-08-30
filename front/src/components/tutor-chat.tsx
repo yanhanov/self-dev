@@ -15,7 +15,15 @@ import {
 import Markdown from 'react-native-markdown-display';
 
 import { ThemedText } from '@/components/themed-text';
-import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
+import { Avatar } from '@/components/ui/avatar';
+import { Icon } from '@/components/ui/icon';
+import {
+  ElevationRaised,
+  Fonts,
+  Palette,
+  Radius,
+  Spacing,
+} from '@/constants/theme';
 import { api, friendlyError, TutorCitation } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
@@ -61,7 +69,7 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
   const controlled = openProp !== undefined;
   const open = controlled ? !!openProp : internalOpen;
   const { width } = useWindowDimensions();
-  const sheetMax = Math.min(560, width - 32);
+  const sheetMax = Math.min(560, width);
 
   function setOpen(next: boolean) {
     if (!controlled) setInternalOpen(next);
@@ -96,7 +104,7 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
           }))
       );
     } catch {
-      // optional
+      // history is optional context
     } finally {
       setLoadingHistory(false);
     }
@@ -157,32 +165,35 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
     }
   }
 
+  const canSend = !!input.trim() && !sending;
+
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={styles.scrim} onPress={() => setOpen(false)} />
+        <Pressable
+          style={styles.scrim}
+          accessibilityLabel="Закрыть чат"
+          onPress={() => setOpen(false)}
+        />
 
         <View style={[styles.sheet, { maxWidth: sheetMax }]}>
-          <View style={styles.handle} />
-
           <View style={styles.header}>
+            <Avatar label="AI" size={36} shape="circle" />
             <View style={styles.headerText}>
-              <ThemedText type="subtitle" style={styles.headerTitle}>
-                Спросить
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                {lessonTitle || 'По проверенным материалам'}
+              <ThemedText type="smallBold">Наставник</ThemedText>
+              <ThemedText type="meta" themeColor="textSecondary" numberOfLines={1}>
+                {lessonTitle || 'Отвечает по материалам урока'}
               </ThemedText>
             </View>
             <Pressable
               onPress={() => setOpen(false)}
-              hitSlop={12}
-              style={({ pressed }) => [styles.close, pressed && { opacity: 0.7 }]}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Закрыть
-              </ThemedText>
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
+              hitSlop={8}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}>
+              <Icon name="close" size={18} color={Palette.inkSoft} />
             </Pressable>
           </View>
 
@@ -193,13 +204,13 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {loadingHistory && messages.length === 0 ? (
-              <ActivityIndicator color={Palette.accent} style={{ marginVertical: 32 }} />
+              <ActivityIndicator color={Palette.brand} style={styles.historySpinner} />
             ) : null}
 
             {!loadingHistory && messages.length === 0 ? (
               <View style={styles.empty}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Короткий вопрос по уроку — отвечу только из базы знаний.
+                  Задайте короткий вопрос по уроку — отвечу только по проверенным материалам.
                 </ThemedText>
                 <View style={styles.chips}>
                   {suggestions.map((s) => (
@@ -207,8 +218,11 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
                       key={s}
                       onPress={() => send(s)}
                       disabled={sending}
-                      style={({ pressed }) => [styles.chip, pressed && styles.chipOn]}>
-                      <ThemedText type="small">{s}</ThemedText>
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}>
+                      <ThemedText type="smallBold" style={styles.chipText}>
+                        {s}
+                      </ThemedText>
                     </Pressable>
                   ))}
                 </View>
@@ -218,48 +232,51 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
             {messages.map((m) => (
               <View
                 key={m.id}
-                style={[styles.msg, m.role === 'user' ? styles.msgUser : styles.msgAi]}>
-                {m.role === 'assistant' ? (
-                  <Markdown style={md}>{m.content}</Markdown>
-                ) : (
-                  <ThemedText type="small" style={styles.userText}>
-                    {m.content}
-                  </ThemedText>
-                )}
+                style={[styles.msgRow, m.role === 'user' ? styles.msgRowUser : styles.msgRowAi]}>
+                <View style={[styles.msg, m.role === 'user' ? styles.msgUser : styles.msgAi]}>
+                  {m.role === 'assistant' ? (
+                    <Markdown style={md}>{m.content}</Markdown>
+                  ) : (
+                    <ThemedText type="small">{m.content}</ThemedText>
+                  )}
 
-                {m.citations?.length ? (
-                  <View style={styles.cites}>
-                    {m.citations.map((c, i) => (
-                      <Pressable
-                        key={`${c.chunk_id}-${i}`}
-                        onPress={() => c.url && Linking.openURL(c.url)}
-                        style={styles.cite}>
-                        <ThemedText type="code" style={styles.citeN}>
-                          {i + 1}
-                        </ThemedText>
-                        <ThemedText type="small" style={styles.citeT} numberOfLines={1}>
-                          {c.source_title}
-                        </ThemedText>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
+                  {m.citations?.length ? (
+                    <View style={styles.cites}>
+                      {m.citations.map((c, i) => (
+                        <Pressable
+                          key={`${c.chunk_id}-${i}`}
+                          onPress={() => c.url && Linking.openURL(c.url)}
+                          accessibilityRole="link"
+                          style={({ pressed }) => [styles.cite, pressed && styles.citePressed]}>
+                          <Icon name="link" size={13} color={Palette.brand} />
+                          <ThemedText type="meta" style={styles.citeText} numberOfLines={1}>
+                            {c.source_title}
+                          </ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
               </View>
             ))}
 
             {sending ? (
-              <View style={[styles.msg, styles.msgAi, styles.typing]}>
-                <ActivityIndicator color={Palette.mint} size="small" />
-                <ThemedText type="small" themeColor="textSecondary">
-                  Ищу в базе…
-                </ThemedText>
+              <View style={[styles.msgRow, styles.msgRowAi]}>
+                <View style={[styles.msg, styles.msgAi, styles.typing]}>
+                  <ActivityIndicator color={Palette.brand} size="small" />
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Ищу в базе знаний…
+                  </ThemedText>
+                </View>
               </View>
             ) : null}
 
             {error ? (
-              <ThemedText type="small" style={styles.error}>
-                {error}
-              </ThemedText>
+              <View style={styles.errorBox}>
+                <ThemedText type="small" style={styles.errorText}>
+                  {error}
+                </ThemedText>
+              </View>
             ) : null}
           </ScrollView>
 
@@ -268,12 +285,13 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
               ref={inputRef}
               value={input}
               onChangeText={setInput}
-              placeholder="Ваш вопрос…"
-              placeholderTextColor={Palette.inkSoft}
+              placeholder="Напишите сообщение…"
+              placeholderTextColor={Palette.inkFaint}
               style={styles.input}
               multiline
               editable={!sending}
-              // @ts-expect-error web
+              accessibilityLabel="Сообщение наставнику"
+              // @ts-expect-error web-only key handling
               onKeyDown={(e: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -283,15 +301,15 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
             />
             <Pressable
               onPress={() => send()}
-              disabled={sending || !input.trim()}
+              disabled={!canSend}
+              accessibilityRole="button"
+              accessibilityLabel="Отправить"
               style={({ pressed }) => [
                 styles.send,
-                (!input.trim() || sending) && styles.sendOff,
-                pressed && { opacity: 0.9 },
+                !canSend && styles.sendOff,
+                pressed && styles.sendPressed,
               ]}>
-              <ThemedText type="smallBold" style={styles.sendText}>
-                →
-              </ThemedText>
+              <Icon name="send" size={16} color="#fff" />
             </Pressable>
           </View>
         </View>
@@ -303,37 +321,37 @@ export function TutorChat({ lessonId, lessonTitle, open: openProp, onOpenChange 
 const md = StyleSheet.create({
   body: {
     color: Palette.ink,
-    fontFamily: Fonts.serif as string,
-    fontSize: 15,
-    lineHeight: 23,
+    fontFamily: Fonts.sans as string,
+    fontSize: 14,
+    lineHeight: 20,
   },
   paragraph: { marginTop: 0, marginBottom: 8 },
-  strong: { fontFamily: Fonts.sans as string, fontWeight: '700' },
+  strong: { fontWeight: '600' },
   bullet_list: { marginBottom: 6 },
   list_item: { marginBottom: 2 },
   code_inline: {
     fontFamily: Fonts.mono as string,
-    backgroundColor: Palette.paperAlt,
+    backgroundColor: Palette.surfaceAlt,
     borderRadius: 4,
     paddingHorizontal: 3,
     fontSize: 13,
   },
   fence: {
     fontFamily: Fonts.mono as string,
-    backgroundColor: Palette.paperAlt,
+    backgroundColor: Palette.surfaceAlt,
     padding: 10,
-    borderRadius: 8,
+    borderRadius: Radius.xs,
     fontSize: 12,
     marginVertical: 6,
   },
-  link: { color: Palette.accentDeep },
+  link: { color: Palette.brand },
 });
 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   scrim: {
     position: 'absolute',
@@ -341,143 +359,129 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(20, 32, 28, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
+  /** Docked message panel, like LinkedIn's messaging overlay. */
   sheet: {
     width: '100%',
-    maxHeight: '88%',
-    minHeight: '52%',
+    maxHeight: '86%',
+    minHeight: '55%',
     backgroundColor: Palette.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: Platform.OS === 'web' ? 1 : 0,
-    borderBottomWidth: 0,
-    borderColor: Palette.line,
-    paddingBottom: Spacing.three,
-    ...(Platform.OS === 'web'
-      ? ({ boxShadow: '0 -12px 40px rgba(20,32,28,0.18)' } as object)
-      : {
-          shadowColor: '#000',
-          shadowOpacity: 0.18,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: -6 },
-          elevation: 16,
-        }),
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(20,32,28,0.16)',
-    marginTop: 10,
-    marginBottom: 4,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    overflow: 'hidden',
+    ...ElevationRaised,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.three,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.line,
+    backgroundColor: Palette.surface,
   },
-  headerText: { flex: 1, gap: 4 },
-  headerTitle: { letterSpacing: -0.4 },
-  close: {
-    paddingVertical: 6,
-    paddingHorizontal: 2,
+  headerText: { flex: 1, gap: 1 },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  thread: { flexGrow: 1 },
+  iconBtnPressed: { backgroundColor: Palette.surfaceHover },
+  thread: { flexGrow: 1, backgroundColor: Palette.surface },
   threadContent: {
     paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.two,
+    paddingVertical: Spacing.three,
     gap: Spacing.two,
     flexGrow: 1,
   },
-  empty: { gap: Spacing.three, paddingTop: Spacing.one },
-  chips: { gap: 8 },
+  historySpinner: { marginVertical: Spacing.six },
+  empty: { gap: Spacing.four, paddingTop: Spacing.two },
+  chips: { gap: Spacing.two, alignItems: 'flex-start' },
   chip: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Palette.paper,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: Palette.line,
+    borderColor: Palette.brand,
   },
-  chipOn: {
-    borderColor: Palette.accent,
-    backgroundColor: '#FFF4EF',
-  },
+  chipPressed: { backgroundColor: Palette.brandWash },
+  chipText: { color: Palette.brand },
+  msgRow: { flexDirection: 'row' },
+  msgRowUser: { justifyContent: 'flex-end' },
+  msgRowAi: { justifyContent: 'flex-start' },
   msg: {
-    maxWidth: '92%',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    gap: 8,
+    maxWidth: '88%',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.lg,
+    gap: Spacing.two,
   },
   msgUser: {
-    alignSelf: 'flex-end',
-    backgroundColor: Palette.ink,
-    borderBottomRightRadius: 6,
+    backgroundColor: Palette.brandSoft,
+    borderBottomRightRadius: Radius.xs,
   },
   msgAi: {
-    alignSelf: 'flex-start',
-    backgroundColor: Palette.paper,
-    borderBottomLeftRadius: 6,
+    backgroundColor: Palette.surfaceAlt,
+    borderBottomLeftRadius: Radius.xs,
   },
-  userText: { color: '#fff' },
-  cites: { gap: 6, marginTop: 2 },
+  cites: {
+    gap: Spacing.one,
+    borderTopWidth: 1,
+    borderTopColor: Palette.line,
+    paddingTop: Spacing.two,
+  },
   cite: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.one,
   },
-  citeN: {
-    color: Palette.mint,
-    minWidth: 12,
-  },
-  citeT: {
-    flex: 1,
-    color: Palette.inkSoft,
-    textDecorationLine: 'underline',
-    textDecorationColor: Palette.line,
-  },
+  citePressed: { opacity: 0.6 },
+  citeText: { flex: 1, color: Palette.brand },
   typing: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.two,
   },
-  error: { color: Palette.danger, paddingHorizontal: 4 },
+  errorBox: {
+    padding: Spacing.three,
+    borderRadius: Radius.xs,
+    backgroundColor: Palette.dangerSoft,
+  },
+  errorText: { color: Palette.danger },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
-    marginHorizontal: Spacing.four,
-    marginTop: Spacing.two,
-    padding: 6,
-    paddingLeft: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Palette.paper,
-    borderWidth: 1.5,
-    borderColor: Palette.line,
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: Palette.line,
+    backgroundColor: Palette.surface,
   },
   input: {
     flex: 1,
     minHeight: 40,
-    maxHeight: 110,
-    paddingVertical: 10,
+    maxHeight: 120,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.lg,
+    backgroundColor: Palette.surfaceAlt,
     color: Palette.ink,
-    fontSize: 16,
-    fontFamily: Fonts.serif as string,
+    fontSize: 15,
+    fontFamily: Fonts.sans as string,
   },
   send: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Palette.accent,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Palette.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendPressed: { backgroundColor: Palette.brandDeep },
   sendOff: { opacity: 0.35 },
-  sendText: { color: '#fff', fontSize: 18 },
 });

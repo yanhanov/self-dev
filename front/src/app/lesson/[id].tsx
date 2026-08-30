@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,7 +9,10 @@ import { ThemedText } from '@/components/themed-text';
 import { TutorChat } from '@/components/tutor-chat';
 import { Atmosphere } from '@/components/ui/atmosphere';
 import { Button } from '@/components/ui/button';
-import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
+import { Card, Divider } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
+import { ProgressBar } from '@/components/ui/progress-bar';
+import { HeaderInset, MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
 import { api, friendlyError, LessonDetail, SourceRef } from '@/lib/api';
 
 function nextBackoff(ms: number) {
@@ -98,7 +95,7 @@ export default function LessonScreen() {
       selected_index: answers[q.id] ?? -1,
     }));
     if (payload.some((a) => a.selected_index < 0)) {
-      setResultMsg('Ответьте на все вопросы ниже');
+      setResultMsg('Ответьте на все вопросы');
       return;
     }
     setSubmitting(true);
@@ -113,13 +110,18 @@ export default function LessonScreen() {
     }
   }
 
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/course');
+  }
+
   if (loading) {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={Palette.brand} />
           <ThemedText type="small" themeColor="textSecondary">
-            Готовим урок…
+            Открываем урок…
           </ThemedText>
         </View>
       </Atmosphere>
@@ -130,8 +132,11 @@ export default function LessonScreen() {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ThemedText type="small">{error || 'Урок не найден'}</ThemedText>
-          <Button label="К курсу" variant="ghost" onPress={() => router.replace('/course')} />
+          <ThemedText type="subtitle">Урок не найден</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {error || 'Попробуйте вернуться к программе курса.'}
+          </ThemedText>
+          <Button label="К курсу" onPress={() => router.replace('/course')} />
         </View>
       </Atmosphere>
     );
@@ -143,98 +148,129 @@ export default function LessonScreen() {
 
   return (
     <Atmosphere>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <View style={styles.topBar}>
-          <Pressable
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace('/course');
-            }}
-            hitSlop={10}
-            style={styles.topLink}>
-            <ThemedText type="link">← Курс</ThemedText>
-          </Pressable>
-          {!generating ? (
+          <View style={styles.topInner}>
             <Pressable
-              onPress={() => setTutorOpen(true)}
-              hitSlop={10}
-              style={({ pressed }) => [styles.askBtn, pressed && styles.askBtnPressed]}>
-              <View style={styles.askDot} />
-              <ThemedText type="smallBold" style={styles.askBtnText}>
-                Спросить
-              </ThemedText>
+              onPress={goBack}
+              accessibilityRole="button"
+              accessibilityLabel="Назад к курсу"
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}>
+              <Icon name="back" size={20} color={Palette.ink} />
             </Pressable>
-          ) : null}
+            <ThemedText type="smallBold" numberOfLines={1} style={styles.topTitle}>
+              {lesson.title}
+            </ThemedText>
+            {!generating ? (
+              <Button
+                label="Спросить"
+                icon="chat"
+                variant="secondary"
+                onPress={() => setTutorOpen(true)}
+              />
+            ) : (
+              <View style={styles.topSpacer} />
+            )}
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.header}>
-            <ThemedText type="label" themeColor="textSecondary">
-              Урок {String(lesson.order_index).padStart(2, '0')}
+          <Card>
+            <ThemedText type="meta" themeColor="textSecondary">
+              Урок {lesson.order_index}
             </ThemedText>
-            <ThemedText type="title">{lesson.title}</ThemedText>
+            <ThemedText type="title" style={styles.lessonTitle}>
+              {lesson.title}
+            </ThemedText>
             {lesson.summary ? (
               <ThemedText type="small" themeColor="textSecondary">
                 {lesson.summary}
               </ThemedText>
             ) : null}
-          </View>
+          </Card>
 
           {generating ? (
-            <View style={styles.banner}>
-              <ActivityIndicator color={Palette.accent} size="small" />
-              <ThemedText type="small" themeColor="textSecondary">
-                Собираем материал — обычно меньше минуты
-              </ThemedText>
-            </View>
+            <Card>
+              <View style={styles.generating}>
+                <ActivityIndicator color={Palette.brand} />
+                <ThemedText type="subtitle">Собираем материал</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+                  Обычно это занимает меньше минуты. Страница обновится сама.
+                </ThemedText>
+              </View>
+            </Card>
           ) : (
             <>
-              <View style={styles.section}>
-                <ThemedText type="subtitle">Теория</ThemedText>
-                <MarkdownBody content={theory} bare />
+              <Card padded={false}>
+                <SectionHead icon="book" title="Теория" />
+                <Divider />
+                <View style={styles.sectionBody}>
+                  <MarkdownBody content={theory} bare />
+                </View>
                 {sourceCount > 0 ? (
-                  <View style={styles.sourcesBlock}>
-                    <Pressable onPress={() => setSourcesOpen((v) => !v)} style={styles.sourcesToggle}>
-                      <ThemedText type="smallBold">
+                  <>
+                    <Divider />
+                    <Pressable
+                      onPress={() => setSourcesOpen((v) => !v)}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.sourcesToggle, pressed && styles.rowPressed]}>
+                      <Icon name="link" size={16} color={Palette.inkSoft} />
+                      <ThemedText type="smallBold" themeColor="textSecondary">
                         {sourcesOpen ? 'Скрыть источники' : `Источники · ${sourceCount}`}
                       </ThemedText>
                     </Pressable>
-                    {sourcesOpen ? <SourceRefs refs={sourceRefs} /> : null}
-                  </View>
+                    {sourcesOpen ? (
+                      <View style={styles.sourcesBody}>
+                        <SourceRefs refs={sourceRefs} />
+                      </View>
+                    ) : null}
+                  </>
                 ) : null}
-              </View>
+              </Card>
 
-              <View style={styles.divider} />
-
-              <View style={styles.section}>
-                <ThemedText type="subtitle">Практика</ThemedText>
-                <MarkdownBody content={practice} bare />
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.section}>
-                <View style={styles.quizHead}>
-                  <ThemedText type="subtitle">Проверка</ThemedText>
-                  {!score && lesson.quiz.length > 0 ? (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {answeredCount}/{lesson.quiz.length}
-                    </ThemedText>
-                  ) : null}
+              <Card padded={false}>
+                <SectionHead icon="grid" title="Практика" />
+                <Divider />
+                <View style={styles.sectionBody}>
+                  <MarkdownBody content={practice} bare />
                 </View>
+              </Card>
+
+              <Card padded={false}>
+                <SectionHead
+                  icon="checkCircle"
+                  title="Проверка знаний"
+                  meta={
+                    !score && lesson.quiz.length > 0
+                      ? `${answeredCount} из ${lesson.quiz.length}`
+                      : undefined
+                  }
+                />
+                <Divider />
 
                 {score ? (
                   <View style={styles.scoreCard}>
-                    <ThemedText type="title" style={styles.scoreValue}>
-                      {score.score}/{score.total}
+                    <View style={styles.scoreIcon}>
+                      <Icon name="checkCircle" size={28} color={Palette.success} />
+                    </View>
+                    <ThemedText type="headline">
+                      {score.score} из {score.total}
                     </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Урок пройден. Можно идти дальше.
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+                      Урок пройден. Можно двигаться дальше.
                     </ThemedText>
-                    <Button label="К курсу" onPress={() => router.replace('/course')} />
+                    <Button
+                      label="Вернуться к курсу"
+                      size="lg"
+                      onPress={() => router.replace('/course')}
+                    />
                   </View>
                 ) : (
                   <View style={styles.quiz}>
+                    {lesson.quiz.length > 0 ? (
+                      <ProgressBar value={answeredCount} total={lesson.quiz.length} />
+                    ) : null}
+
                     {lesson.quiz.map((q, qIdx) => {
                       const options = Array.isArray(q.options) ? q.options : [];
                       return (
@@ -242,35 +278,54 @@ export default function LessonScreen() {
                           <ThemedText type="smallBold">
                             {qIdx + 1}. {q.question}
                           </ThemedText>
-                          {options.map((opt, idx) => {
-                            const selected = answers[q.id] === idx;
-                            return (
-                              <Pressable
-                                key={`${q.id}-${idx}`}
-                                onPress={() =>
-                                  setAnswers((prev) => ({ ...prev, [q.id]: idx }))
-                                }
-                                style={[styles.option, selected && styles.optionSelected]}>
-                                <ThemedText type="small">{opt}</ThemedText>
-                              </Pressable>
-                            );
-                          })}
+                          <View style={styles.options}>
+                            {options.map((opt, idx) => {
+                              const selected = answers[q.id] === idx;
+                              return (
+                                <Pressable
+                                  key={`${q.id}-${idx}`}
+                                  accessibilityRole="radio"
+                                  accessibilityState={{ selected }}
+                                  onPress={() =>
+                                    setAnswers((prev) => ({ ...prev, [q.id]: idx }))
+                                  }
+                                  style={({ pressed }) => [
+                                    styles.option,
+                                    selected && styles.optionSelected,
+                                    pressed && !selected && styles.rowPressed,
+                                  ]}>
+                                  <View style={[styles.radio, selected && styles.radioOn]}>
+                                    {selected ? <View style={styles.radioDot} /> : null}
+                                  </View>
+                                  <ThemedText type="small" style={styles.optionText}>
+                                    {opt}
+                                  </ThemedText>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
                         </View>
                       );
                     })}
+
+                    {resultMsg ? (
+                      <View style={styles.inlineError}>
+                        <ThemedText type="small" style={styles.errorText}>
+                          {resultMsg}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+
                     <Button
                       label={submitting ? 'Проверяем…' : 'Завершить урок'}
+                      size="lg"
+                      fullWidth
                       onPress={submitQuiz}
                       disabled={submitting || lesson.quiz.length === 0}
                     />
-                    {resultMsg ? (
-                      <ThemedText type="small" style={styles.error}>
-                        {resultMsg}
-                      </ThemedText>
-                    ) : null}
                   </View>
                 )}
-              </View>
+              </Card>
             </>
           )}
         </ScrollView>
@@ -286,6 +341,30 @@ export default function LessonScreen() {
   );
 }
 
+function SectionHead({
+  icon,
+  title,
+  meta,
+}: {
+  icon: 'book' | 'grid' | 'checkCircle';
+  title: string;
+  meta?: string;
+}) {
+  return (
+    <View style={styles.sectionHead}>
+      <Icon name={icon} size={18} color={Palette.inkSoft} filled={false} />
+      <ThemedText type="subtitle" style={styles.sectionTitle}>
+        {title}
+      </ThemedText>
+      {meta ? (
+        <ThemedText type="meta" themeColor="textSecondary">
+          {meta}
+        </ThemedText>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: {
@@ -293,81 +372,125 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.three,
-    padding: Spacing.four,
+    padding: Spacing.five,
   },
+  centerText: { textAlign: 'center' },
   topBar: {
+    backgroundColor: Palette.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.line,
+    minHeight: HeaderInset,
+    justifyContent: 'center',
+  },
+  topInner: {
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
-  topLink: { paddingVertical: 8 },
-  askBtn: {
-    flexDirection: 'row',
+  topTitle: { flex: 1 },
+  topSpacer: { width: 1 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: Radius.sm,
-    backgroundColor: Palette.ink,
+    justifyContent: 'center',
   },
-  askBtnPressed: { opacity: 0.88 },
-  askDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Palette.mint,
-  },
-  askBtnText: { color: '#fff' },
+  iconBtnPressed: { backgroundColor: Palette.surfaceHover },
   content: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.four,
+    padding: Spacing.four,
+    gap: Spacing.two,
+    paddingBottom: Spacing.seven,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  header: { gap: Spacing.two },
-  banner: {
+  lessonTitle: { marginTop: 2, marginBottom: Spacing.one },
+  generating: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.four,
+  },
+  sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.four,
   },
-  section: { gap: Spacing.three },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Palette.line,
-  },
-  sourcesBlock: { gap: Spacing.two },
-  sourcesToggle: { paddingVertical: 4 },
-  quizHead: {
+  sectionTitle: { flex: 1 },
+  sectionBody: { padding: Spacing.four },
+  sourcesToggle: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
   },
-  quiz: { gap: Spacing.four },
+  sourcesBody: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+  },
+  rowPressed: { backgroundColor: Palette.surfaceHover },
+  quiz: {
+    padding: Spacing.four,
+    gap: Spacing.five,
+  },
   question: { gap: Spacing.two },
+  options: { gap: Spacing.two },
   option: {
-    borderWidth: 1.5,
-    borderColor: Palette.line,
-    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderColor: Palette.lineStrong,
+    borderRadius: Radius.sm,
     padding: Spacing.three,
     backgroundColor: Palette.surface,
   },
   optionSelected: {
-    borderColor: Palette.accent,
-    backgroundColor: '#FFF4EF',
+    borderColor: Palette.brand,
+    backgroundColor: Palette.brandSoft,
+  },
+  optionText: { flex: 1 },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Palette.inkSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOn: { borderColor: Palette.brand },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Palette.brand,
   },
   scoreCard: {
-    gap: Spacing.three,
-    paddingVertical: Spacing.two,
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.five,
   },
-  scoreValue: { color: Palette.mint },
-  error: { color: Palette.danger },
+  scoreIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.successSoft,
+    marginBottom: Spacing.one,
+  },
+  inlineError: {
+    padding: Spacing.three,
+    borderRadius: Radius.xs,
+    backgroundColor: Palette.dangerSoft,
+  },
+  errorText: { color: Palette.danger },
 });

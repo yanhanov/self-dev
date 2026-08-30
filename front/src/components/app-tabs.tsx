@@ -5,11 +5,11 @@ import { Palette } from '@/constants/theme';
 export default function AppTabs() {
   return (
     <NativeTabs
-      backgroundColor={Palette.paper}
-      indicatorColor={Palette.accent}
+      backgroundColor={Palette.surface}
+      indicatorColor={Palette.brandSoft}
       labelStyle={{
         color: Palette.inkSoft,
-        selected: { color: Palette.ink },
+        selected: { color: Palette.brand },
       }}>
       <NativeTabs.Trigger name="course">
         <NativeTabs.Trigger.Label>Курс</NativeTabs.Trigger.Label>

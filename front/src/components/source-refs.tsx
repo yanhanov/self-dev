@@ -1,7 +1,8 @@
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Palette, Spacing } from '@/constants/theme';
+import { Icon } from '@/components/ui/icon';
+import { Palette, Radius, Spacing } from '@/constants/theme';
 import type { SourceRef } from '@/lib/api';
 
 type Props = {
@@ -25,16 +26,20 @@ export function SourceRefs({ refs }: Props) {
       {items.map((ref, idx) => (
         <Pressable
           key={`${ref.chunk_id || ref.url}-${idx}`}
+          accessibilityRole="link"
           onPress={() => {
             if (ref.url) Linking.openURL(ref.url);
           }}
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-          <ThemedText type="code" style={styles.index}>
-            {idx + 1}
-          </ThemedText>
+          <View style={styles.index}>
+            <ThemedText type="metaBold" style={styles.indexText}>
+              {idx + 1}
+            </ThemedText>
+          </View>
           <ThemedText type="small" style={styles.title} numberOfLines={2}>
             {ref.source_title}
           </ThemedText>
+          {ref.url ? <Icon name="link" size={14} color={Palette.inkFaint} /> : null}
         </Pressable>
       ))}
     </View>
@@ -43,24 +48,32 @@ export function SourceRefs({ refs }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 6,
+    gap: Spacing.one,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.two,
-    paddingVertical: 8,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radius.xs,
   },
   rowPressed: {
-    opacity: 0.7,
+    backgroundColor: Palette.surfaceHover,
   },
   index: {
-    color: Palette.mint,
-    minWidth: 16,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.surfaceAlt,
+  },
+  indexText: {
+    color: Palette.inkSoft,
   },
   title: {
     flex: 1,
-    textDecorationLine: 'underline',
-    textDecorationColor: Palette.line,
+    color: Palette.brand,
   },
 });

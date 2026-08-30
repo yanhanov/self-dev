@@ -10,12 +10,12 @@ const SelfDevTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    primary: Palette.accent,
+    primary: Palette.brand,
     background: Palette.paper,
     card: Palette.surface,
     text: Palette.ink,
     border: Palette.line,
-    notification: Palette.accent,
+    notification: Palette.brand,
   },
 };
 

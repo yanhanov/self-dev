@@ -28,7 +28,7 @@ export default function HomeScreen() {
   return (
     <Atmosphere>
       <View style={styles.center}>
-        <ActivityIndicator color={Palette.accent} />
+        <ActivityIndicator color={Palette.brand} />
       </View>
     </Atmosphere>
   );

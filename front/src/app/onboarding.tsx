@@ -1,26 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
+import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Card, Divider } from '@/components/ui/card';
 import { Choice } from '@/components/ui/choice';
 import { FieldInput } from '@/components/ui/field-input';
+import { Icon } from '@/components/ui/icon';
 import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
-import { api, Profession, SkillLevel } from '@/lib/api';
+import { api, friendlyError, Profession, SkillLevel } from '@/lib/api';
 import { setStoredUser } from '@/store/user';
 
 type Step = 0 | 1 | 2;
 
 const HOUR_OPTIONS = [5, 8, 12, 20];
+
+const STEP_COPY: Record<Step, { title: string; hint: string }> = {
+  0: { title: 'Кем вы хотите стать?', hint: 'Выберите направление — курс соберётся под него.' },
+  1: { title: 'Ваш текущий уровень', hint: 'Оцените себя честно, программа подстроится.' },
+  2: { title: 'Контакт и ритм', hint: 'Последний шаг — и можно начинать.' },
+};
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState<Step>(0);
@@ -41,7 +44,7 @@ export default function OnboardingScreen() {
         setProfessions(p);
         setLevels(l);
       })
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(friendlyError(e)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -69,7 +72,7 @@ export default function OnboardingScreen() {
       });
       router.replace('/course');
     } catch (e) {
-      setError(String(e));
+      setError(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
@@ -78,7 +81,7 @@ export default function OnboardingScreen() {
   function next() {
     setError(null);
     if (step === 0 && !professionSlug) {
-      setError('Выберите профессию');
+      setError('Выберите направление');
       return;
     }
     if (step === 1 && !levelSlug) {
@@ -103,7 +106,7 @@ export default function OnboardingScreen() {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={Palette.brand} />
         </View>
       </Atmosphere>
     );
@@ -112,83 +115,103 @@ export default function OnboardingScreen() {
   return (
     <Atmosphere>
       <SafeAreaView style={styles.safe}>
-        <View style={styles.shell}>
-          <View style={styles.topBar}>
-            <Pressable onPress={back} hitSlop={12}>
-              <ThemedText type="smallBold" style={styles.back}>
-                ← назад
-              </ThemedText>
-            </Pressable>
-            <View style={styles.steps}>
-              {[0, 1, 2].map((i) => (
-                <View key={i} style={[styles.stepDot, i <= step && styles.stepDotOn]} />
-              ))}
+        <View style={styles.topBar}>
+          <View style={styles.topInner}>
+            <View style={styles.brand}>
+              <View style={styles.logoMark}>
+                <ThemedText type="metaBold" style={styles.logoText}>
+                  SD
+                </ThemedText>
+              </View>
+              <ThemedText type="smallBold">SelfDev</ThemedText>
             </View>
-            <ThemedText type="label" themeColor="textSecondary">
-              {step + 1}/3
+            <ThemedText type="meta" themeColor="textSecondary">
+              Шаг {step + 1} из 3
             </ThemedText>
           </View>
+          <View style={styles.stepTrack}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={[styles.stepSeg, i <= step && styles.stepSegOn]} />
+            ))}
+          </View>
+        </View>
 
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            {step === 0 ? (
-              <View style={styles.panel}>
-                <ThemedText type="title">Куда идём?</ThemedText>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <Card>
+            <View style={styles.headRow}>
+              <Pressable
+                onPress={back}
+                accessibilityRole="button"
+                accessibilityLabel="Назад"
+                style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}>
+                <Icon name="back" size={18} color={Palette.ink} />
+              </Pressable>
+              <View style={styles.headCopy}>
+                <ThemedText type="title">{STEP_COPY[step].title}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Выберите профессию — AI соберёт курс именно под неё.
+                  {STEP_COPY[step].hint}
                 </ThemedText>
-                <View style={styles.grid}>
-                  {professions.map((p) => (
-                    <Pressable
-                      key={p.id}
-                      onPress={() => setProfessionSlug(p.slug)}
-                      style={[
-                        styles.profession,
-                        professionSlug === p.slug && styles.professionOn,
-                      ]}>
-                      <ThemedText type="subtitle" style={styles.professionTitle}>
-                        {p.title}
-                      </ThemedText>
+              </View>
+            </View>
+
+            <Divider style={styles.headDivider} />
+
+            {step === 0 ? (
+              <View style={styles.stack}>
+                {professions.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: professionSlug === p.slug }}
+                    onPress={() => setProfessionSlug(p.slug)}
+                    style={({ pressed }) => [
+                      styles.profession,
+                      professionSlug === p.slug && styles.professionOn,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Avatar
+                      label={p.title}
+                      size={48}
+                      tone={professionSlug === p.slug ? 'brand' : 'neutral'}
+                    />
+                    <View style={styles.professionCopy}>
+                      <ThemedText type="subtitle">{p.title}</ThemedText>
                       <ThemedText type="small" themeColor="textSecondary">
                         {p.description}
                       </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
+                    </View>
+                    {professionSlug === p.slug ? (
+                      <Icon name="checkCircle" size={22} color={Palette.brand} />
+                    ) : null}
+                  </Pressable>
+                ))}
               </View>
             ) : null}
 
             {step === 1 ? (
-              <View style={styles.panel}>
-                <ThemedText type="title">Ваш уровень</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {selectedProfession
-                    ? `Для ${selectedProfession.title} — честно, без завышения.`
-                    : 'Честно оцените старт.'}
-                </ThemedText>
-                <View style={styles.stack}>
-                  {levels.map((l) => (
-                    <Choice
-                      key={l.id}
-                      selected={levelSlug === l.slug}
-                      title={l.title}
-                      subtitle={l.description}
-                      onPress={() => setLevelSlug(l.slug)}
-                    />
-                  ))}
-                </View>
+              <View style={styles.stack}>
+                {selectedProfession ? (
+                  <ThemedText type="meta" themeColor="textSecondary">
+                    Направление: {selectedProfession.title}
+                  </ThemedText>
+                ) : null}
+                {levels.map((l) => (
+                  <Choice
+                    key={l.id}
+                    selected={levelSlug === l.slug}
+                    title={l.title}
+                    subtitle={l.description}
+                    onPress={() => setLevelSlug(l.slug)}
+                  />
+                ))}
               </View>
             ) : null}
 
             {step === 2 ? (
-              <View style={styles.panel}>
-                <ThemedText type="title">Почти готово</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Оставим контакт и ритм — чтобы курс был реалистичным.
-                </ThemedText>
-
+              <View style={styles.stack}>
                 <FieldInput
                   label="Имя"
                   value={name}
@@ -202,20 +225,29 @@ export default function OnboardingScreen() {
                   placeholder="you@example.com"
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  hint="Нужен, чтобы сохранить прогресс курса."
                 />
 
                 <View style={styles.hoursBlock}>
-                  <ThemedText type="label">Часов в неделю</ThemedText>
+                  <ThemedText type="meta" themeColor="textSecondary">
+                    Сколько часов в неделю готовы учиться
+                  </ThemedText>
                   <View style={styles.hoursRow}>
                     {HOUR_OPTIONS.map((h) => (
                       <Pressable
                         key={h}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: weeklyHours === h }}
                         onPress={() => setWeeklyHours(h)}
-                        style={[styles.hourChip, weeklyHours === h && styles.hourChipOn]}>
+                        style={({ pressed }) => [
+                          styles.hourChip,
+                          weeklyHours === h && styles.hourChipOn,
+                          pressed && styles.pressed,
+                        ]}>
                         <ThemedText
                           type="smallBold"
-                          style={weeklyHours === h ? styles.hourTextOn : undefined}>
-                          {h}ч
+                          style={weeklyHours === h ? styles.hourTextOn : styles.hourText}>
+                          {h} ч
                         </ThemedText>
                       </Pressable>
                     ))}
@@ -225,22 +257,23 @@ export default function OnboardingScreen() {
             ) : null}
 
             {error ? (
-              <ThemedText type="small" style={styles.error}>
-                {error}
-              </ThemedText>
+              <View style={styles.errorBox}>
+                <ThemedText type="small" style={styles.errorText}>
+                  {error}
+                </ThemedText>
+              </View>
             ) : null}
-          </ScrollView>
 
-          <View style={styles.footer}>
             <Button
-              label={
-                submitting ? 'Создаём…' : step === 2 ? 'Собрать мой курс' : 'Дальше'
-              }
+              label={submitting ? 'Собираем курс…' : step === 2 ? 'Собрать мой курс' : 'Далее'}
+              size="lg"
+              fullWidth
               onPress={next}
               disabled={submitting}
+              style={styles.submit}
             />
-          </View>
-        </View>
+          </Card>
+        </ScrollView>
       </SafeAreaView>
     </Atmosphere>
   );
@@ -249,101 +282,115 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  shell: {
-    flex: 1,
+  topBar: {
+    backgroundColor: Palette.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.line,
+  },
+  topInner: {
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  logoMark: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.xs,
+    backgroundColor: Palette.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoText: { color: '#fff' },
+  stepTrack: {
+    flexDirection: 'row',
+    gap: 2,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  topBar: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.three,
-  },
-  back: {
-    color: Palette.inkSoft,
-  },
-  steps: {
-    flexDirection: 'row',
-    gap: 6,
+  stepSeg: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  stepDot: {
-    width: 28,
     height: 3,
-    borderRadius: 2,
     backgroundColor: Palette.line,
   },
-  stepDotOn: {
-    backgroundColor: Palette.accent,
-  },
+  stepSegOn: { backgroundColor: Palette.brand },
   content: {
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-    paddingBottom: Spacing.three,
-  },
-  panel: {
-    gap: Spacing.three,
-  },
-  grid: {
-    gap: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  profession: {
     padding: Spacing.four,
-    borderRadius: Radius.lg,
-    backgroundColor: Palette.surface,
-    borderWidth: 1.5,
-    borderColor: Palette.line,
+    paddingBottom: Spacing.seven,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  headRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: Spacing.two,
-    minHeight: 140,
-    justifyContent: 'flex-end',
+  },
+  headCopy: { flex: 1, gap: Spacing.one, paddingTop: Spacing.one },
+  headDivider: { marginVertical: Spacing.four },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -Spacing.two,
+  },
+  iconBtnPressed: { backgroundColor: Palette.surfaceHover },
+  stack: { gap: Spacing.two },
+  pressed: { backgroundColor: Palette.surfaceAlt },
+  profession: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.four,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Palette.lineStrong,
+    backgroundColor: Palette.surface,
   },
   professionOn: {
-    borderColor: Palette.accent,
-    backgroundColor: '#FFF4EF',
+    borderColor: Palette.brand,
+    backgroundColor: Palette.brandSoft,
   },
-  professionTitle: {
-    fontSize: 26,
-    lineHeight: 30,
-  },
-  stack: {
-    gap: Spacing.two,
-    marginTop: Spacing.two,
-  },
-  hoursBlock: {
-    gap: Spacing.two,
-  },
+  professionCopy: { flex: 1, gap: 2 },
+  hoursBlock: { gap: Spacing.two, marginTop: Spacing.two },
   hoursRow: {
     flexDirection: 'row',
     gap: Spacing.two,
   },
   hourChip: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: Palette.line,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Palette.lineStrong,
     backgroundColor: Palette.surface,
   },
   hourChipOn: {
-    borderColor: Palette.ink,
-    backgroundColor: Palette.ink,
+    borderColor: Palette.brand,
+    backgroundColor: Palette.brandSoft,
   },
-  hourTextOn: {
-    color: '#fff',
+  hourText: { color: Palette.inkSoft },
+  hourTextOn: { color: Palette.brandDeep },
+  errorBox: {
+    marginTop: Spacing.four,
+    padding: Spacing.three,
+    borderRadius: Radius.xs,
+    backgroundColor: Palette.dangerSoft,
   },
-  footer: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.four,
-    paddingTop: Spacing.two,
-  },
-  error: { color: Palette.danger },
+  errorText: { color: Palette.danger },
+  submit: { marginTop: Spacing.five },
 });

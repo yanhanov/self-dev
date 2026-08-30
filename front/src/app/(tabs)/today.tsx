@@ -13,21 +13,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
 import { Button } from '@/components/ui/button';
+import { Card, Divider } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { MaxContentWidth, Palette, Radius, Spacing } from '@/constants/theme';
 import { api, friendlyError, TodayResponse } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
 function formatPlanDate(raw?: string) {
-  if (!raw) return 'сегодня';
+  if (!raw) return 'Сегодня';
   try {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return raw;
-    return d.toLocaleDateString('ru-RU', {
+    const formatted = d.toLocaleDateString('ru-RU', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
     });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   } catch {
     return raw;
   }
@@ -69,6 +72,7 @@ export default function TodayScreen() {
     [data]
   );
   const totalCount = data?.tasks.length ?? 0;
+  const allDone = totalCount > 0 && doneCount === totalCount;
 
   async function markDone(taskId: string) {
     if (!userId) return;
@@ -87,7 +91,7 @@ export default function TodayScreen() {
     return (
       <Atmosphere>
         <View style={styles.center}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={Palette.brand} />
           <ThemedText type="small" themeColor="textSecondary">
             Собираем план на день…
           </ThemedText>
@@ -98,7 +102,7 @@ export default function TodayScreen() {
 
   return (
     <Atmosphere>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
@@ -108,103 +112,173 @@ export default function TodayScreen() {
                 setRefreshing(true);
                 load();
               }}
-              tintColor={Palette.accent}
+              tintColor={Palette.brand}
             />
           }>
-          <View style={styles.header}>
-            <ThemedText type="label" themeColor="textSecondary">
+          <Card>
+            <ThemedText type="meta" themeColor="textSecondary">
               {formatPlanDate(data?.plan.plan_date)}
             </ThemedText>
-            <ThemedText type="title">План дня</ThemedText>
-            {data ? (
+            <ThemedText type="title" style={styles.pageTitle}>
+              План на день
+            </ThemedText>
+            {data?.plan.summary ? (
               <ThemedText type="small" themeColor="textSecondary">
                 {data.plan.summary}
               </ThemedText>
             ) : null}
-          </View>
 
-          {totalCount > 0 ? (
-            <View style={styles.progressBlock}>
-              <View style={styles.progressMeta}>
-                <ThemedText type="smallBold">
-                  {doneCount} из {totalCount} задач
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {doneCount === totalCount ? 'день закрыт' : 'в работе'}
-                </ThemedText>
+            {totalCount > 0 ? (
+              <View style={styles.progressBlock}>
+                <View style={styles.progressMeta}>
+                  <ThemedText type="metaBold" themeColor="textSecondary">
+                    {doneCount} из {totalCount} задач
+                  </ThemedText>
+                  <ThemedText
+                    type="metaBold"
+                    style={allDone ? styles.doneAccent : styles.brandAccent}>
+                    {allDone ? 'День закрыт' : 'В работе'}
+                  </ThemedText>
+                </View>
+                <ProgressBar
+                  value={doneCount}
+                  total={totalCount}
+                  tone={allDone ? 'success' : 'brand'}
+                />
               </View>
-              <ProgressBar value={doneCount} total={totalCount} />
-            </View>
-          ) : null}
+            ) : null}
+          </Card>
 
           {error ? (
-            <ThemedText type="small" style={styles.error}>
-              {error}
-            </ThemedText>
+            <Card>
+              <ThemedText type="small" style={styles.errorText}>
+                {error}
+              </ThemedText>
+            </Card>
           ) : null}
 
           {!data?.tasks?.length && !error ? (
-            <View style={styles.empty}>
-              <ThemedText type="smallBold">Пока пусто</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Потяните вниз, чтобы обновить, или откройте курс и пройдите следующий урок.
-              </ThemedText>
-              <Button label="К курсу" variant="ghost" onPress={() => router.push('/course')} />
-            </View>
+            <Card>
+              <View style={styles.empty}>
+                <View style={styles.emptyIcon}>
+                  <Icon name="sparkle" size={24} color={Palette.brand} />
+                </View>
+                <ThemedText type="subtitle">На сегодня задач нет</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
+                  Потяните вниз, чтобы обновить, или откройте курс и пройдите следующий урок.
+                </ThemedText>
+                <Button label="Перейти к курсу" onPress={() => router.push('/course')} />
+              </View>
+            </Card>
           ) : null}
 
-          <View style={styles.list}>
-            {data?.tasks.map((task, index) => {
-              const done = task.status === 'done';
-              return (
-                <View key={task.id} style={[styles.task, done && styles.taskDone]}>
-                  <View style={styles.taskTop}>
-                    <View style={[styles.badge, done && styles.badgeDone]}>
-                      <ThemedText type="label" style={done ? styles.badgeTextDone : styles.badgeText}>
-                        {String(index + 1).padStart(2, '0')}
+          {data?.tasks.map((task, index) => {
+            const done = task.status === 'done';
+            return (
+              <Card key={task.id} padded={false}>
+                <View style={styles.taskHead}>
+                  <View style={[styles.taskIcon, done && styles.taskIconDone]}>
+                    {done ? (
+                      <Icon name="check" size={18} color={Palette.success} />
+                    ) : (
+                      <ThemedText type="metaBold" style={styles.taskIndex}>
+                        {index + 1}
                       </ThemedText>
-                    </View>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {task.estimated_minutes ? `${task.estimated_minutes} мин` : '—'}
-                    </ThemedText>
+                    )}
                   </View>
-                  <ThemedText type="subtitle" style={styles.taskTitle}>
-                    {task.title}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {task.description}
-                  </ThemedText>
-                  <View style={styles.actions}>
-                    {task.lesson_id ? (
-                      <Pressable
-                        onPress={() => router.push(`/lesson/${task.lesson_id}`)}
-                        style={styles.linkBtn}>
-                        <ThemedText type="linkPrimary">Открыть урок →</ThemedText>
-                      </Pressable>
-                    ) : (
-                      <View />
-                    )}
-                    {!done ? (
-                      <Button
-                        label={busyId === task.id ? '…' : 'Готово'}
-                        variant="soft"
-                        onPress={() => markDone(task.id)}
-                        disabled={busyId === task.id}
-                        style={styles.doneBtn}
-                      />
-                    ) : (
-                      <ThemedText type="label" style={styles.doneLabel}>
-                        сделано
+                  <View style={styles.taskCopy}>
+                    <ThemedText type="subtitle" style={done && styles.taskTitleDone}>
+                      {task.title}
+                    </ThemedText>
+                    <View style={styles.taskMeta}>
+                      <Icon name="clock" size={13} color={Palette.inkSoft} />
+                      <ThemedText type="meta" themeColor="textSecondary">
+                        {task.estimated_minutes ? `${task.estimated_minutes} мин` : 'без таймера'}
                       </ThemedText>
-                    )}
+                      {done ? (
+                        <>
+                          <ThemedText type="meta" themeColor="textSecondary">
+                            ·
+                          </ThemedText>
+                          <ThemedText type="meta" style={styles.doneAccent}>
+                            Выполнено
+                          </ThemedText>
+                        </>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
-              );
-            })}
-          </View>
+
+                {task.description ? (
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.taskBody}>
+                    {task.description}
+                  </ThemedText>
+                ) : null}
+
+                <Divider style={styles.taskDivider} />
+
+                <View style={styles.taskActions}>
+                  {task.lesson_id ? (
+                    <ActionButton
+                      icon="book"
+                      label="Открыть урок"
+                      onPress={() => router.push(`/lesson/${task.lesson_id}`)}
+                    />
+                  ) : (
+                    <View />
+                  )}
+                  {!done ? (
+                    <ActionButton
+                      icon="checkCircle"
+                      label={busyId === task.id ? 'Сохраняем…' : 'Отметить готовым'}
+                      disabled={busyId === task.id}
+                      onPress={() => markDone(task.id)}
+                    />
+                  ) : (
+                    <View style={styles.doneTag}>
+                      <Icon name="checkCircle" size={16} color={Palette.success} />
+                      <ThemedText type="metaBold" style={styles.doneAccent}>
+                        Готово
+                      </ThemedText>
+                    </View>
+                  )}
+                </View>
+              </Card>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
     </Atmosphere>
+  );
+}
+
+/** Flat text+icon action, the pattern LinkedIn uses under every post. */
+function ActionButton({
+  icon,
+  label,
+  onPress,
+  disabled,
+}: {
+  icon: 'book' | 'checkCircle';
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.action,
+        pressed && styles.actionPressed,
+        disabled && styles.actionDisabled,
+      ]}>
+      <Icon name={icon} size={18} color={Palette.inkSoft} filled={false} />
+      <ThemedText type="smallBold" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -218,73 +292,91 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.four,
-    gap: Spacing.four,
-    paddingBottom: Spacing.six,
+    gap: Spacing.two,
+    paddingBottom: Spacing.seven,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  header: { gap: Spacing.two },
+  pageTitle: { marginTop: 2, marginBottom: Spacing.one },
   progressBlock: {
     gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Radius.md,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
+    marginTop: Spacing.four,
   },
   progressMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  brandAccent: { color: Palette.brand },
+  doneAccent: { color: Palette.success },
   empty: {
-    gap: Spacing.two,
-    padding: Spacing.four,
-    borderRadius: Radius.lg,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
-  },
-  list: { gap: Spacing.three },
-  task: {
-    gap: Spacing.two,
-    padding: Spacing.four,
-    borderRadius: Radius.lg,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
-  },
-  taskDone: {
-    borderColor: Palette.mint,
-    backgroundColor: '#F4FBFA',
-  },
-  taskTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.three,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: '#FFE8E0',
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.brandSoft,
+    marginBottom: Spacing.one,
   },
-  badgeDone: {
-    backgroundColor: Palette.paperAlt,
+  emptyText: { textAlign: 'center', maxWidth: 340, marginBottom: Spacing.two },
+  taskHead: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    alignItems: 'flex-start',
+    padding: Spacing.four,
+    paddingBottom: Spacing.two,
   },
-  badgeText: { color: Palette.accent },
-  badgeTextDone: { color: Palette.mint },
-  taskTitle: { fontSize: 22, lineHeight: 28 },
-  actions: {
-    marginTop: Spacing.two,
+  taskIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.brandSoft,
+  },
+  taskIconDone: { backgroundColor: Palette.successSoft },
+  taskIndex: { color: Palette.brandDeep },
+  taskCopy: { flex: 1, gap: 2 },
+  taskTitleDone: { color: Palette.inkSoft },
+  taskMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.one,
+  },
+  taskBody: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+  },
+  taskDivider: { marginHorizontal: Spacing.four },
+  taskActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
+    padding: Spacing.two,
   },
-  linkBtn: { paddingVertical: 8 },
-  doneBtn: { minWidth: 120 },
-  doneLabel: { color: Palette.success },
-  error: { color: Palette.danger },
+  action: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.xs,
+  },
+  actionPressed: { backgroundColor: Palette.surfaceHover },
+  actionDisabled: { opacity: 0.5 },
+  doneTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  errorText: { color: Palette.danger },
 });

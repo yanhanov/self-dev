@@ -1,84 +1,111 @@
 import { forwardRef } from 'react';
-import { Pressable, StyleSheet, type PressableProps } from 'react-native';
+import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
-type Props = PressableProps & {
+type Variant = 'primary' | 'secondary' | 'tertiary';
+
+type Props = Omit<PressableProps, 'children'> & {
   label: string;
-  variant?: 'primary' | 'ghost' | 'soft';
+  variant?: Variant;
+  size?: 'md' | 'lg';
+  icon?: IconName;
+  fullWidth?: boolean;
 };
 
-export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(
-  function Button({ label, variant = 'primary', style, disabled, ...rest }, ref) {
-    return (
-      <Pressable
-        ref={ref}
-        accessibilityRole="button"
-        disabled={disabled}
-        style={({ pressed }) => [
-          styles.base,
-          variant === 'primary' && styles.primary,
-          variant === 'ghost' && styles.ghost,
-          variant === 'soft' && styles.soft,
-          pressed && styles.pressed,
-          disabled && styles.disabled,
-          typeof style === 'function' ? style({ pressed }) : style,
-        ]}
-        {...rest}>
-        <ThemedText
-          type="smallBold"
-          style={[
-            styles.label,
-            variant === 'primary' && styles.labelOnAccent,
-            variant === 'ghost' && styles.labelGhost,
-            variant === 'soft' && styles.labelSoft,
-          ]}>
+/** react-native-web hands `hovered` to the style callback; native never does. */
+function isHovered(state: unknown) {
+  return !!(state as { hovered?: boolean }).hovered;
+}
+
+const LABEL_COLOR: Record<Variant, string> = {
+  primary: '#fff',
+  secondary: Palette.brand,
+  tertiary: Palette.inkSoft,
+};
+
+export const Button = forwardRef<React.ComponentRef<typeof Pressable>, Props>(function Button(
+  { label, variant = 'primary', size = 'md', icon, fullWidth, style, disabled, ...rest },
+  ref
+) {
+  return (
+    <Pressable
+      ref={ref}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      style={(state) => [
+        styles.base,
+        size === 'lg' ? styles.lg : styles.md,
+        variant === 'primary' && styles.primary,
+        variant === 'secondary' && styles.secondary,
+        variant === 'tertiary' && styles.tertiary,
+        (state.pressed || isHovered(state)) && variant === 'primary' && styles.primaryActive,
+        (state.pressed || isHovered(state)) && variant === 'secondary' && styles.secondaryActive,
+        (state.pressed || isHovered(state)) && variant === 'tertiary' && styles.tertiaryActive,
+        fullWidth && styles.fullWidth,
+        disabled && styles.disabled,
+        typeof style === 'function' ? style(state) : style,
+      ]}
+      {...rest}>
+      <View style={styles.inner}>
+        {icon ? <Icon name={icon} size={18} color={LABEL_COLOR[variant]} /> : null}
+        <ThemedText type="smallBold" style={{ color: LABEL_COLOR[variant] }}>
           {label}
         </ThemedText>
-      </Pressable>
-    );
-  }
-);
+      </View>
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 52,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  md: {
+    minHeight: 36,
+    paddingHorizontal: Spacing.four,
+  },
+  lg: {
+    minHeight: 48,
+    paddingHorizontal: Spacing.five,
+  },
+  inner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  fullWidth: {
+    alignSelf: 'stretch',
   },
   primary: {
-    backgroundColor: Palette.accent,
+    backgroundColor: Palette.brand,
   },
-  ghost: {
+  primaryActive: {
+    backgroundColor: Palette.brandDeep,
+  },
+  secondary: {
     backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: Palette.ink,
+    borderColor: Palette.brand,
   },
-  soft: {
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.line,
+  secondaryActive: {
+    backgroundColor: Palette.brandWash,
+    borderColor: Palette.brandDeep,
   },
-  pressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
+  tertiary: {
+    backgroundColor: 'transparent',
+  },
+  tertiaryActive: {
+    backgroundColor: Palette.surfaceHover,
   },
   disabled: {
-    opacity: 0.5,
-  },
-  label: {
-    letterSpacing: 0.2,
-  },
-  labelOnAccent: {
-    color: '#fff',
-  },
-  labelGhost: {
-    color: Palette.ink,
-  },
-  labelSoft: {
-    color: Palette.ink,
+    opacity: 0.45,
   },
 });
