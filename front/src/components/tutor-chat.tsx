@@ -32,23 +32,13 @@ type Message = {
 type Props = {
   lessonId: string;
   lessonTitle?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 const NATIVE_DRIVER = Platform.OS !== 'web';
-/** Rounded enough to read as a capsule when empty, still sane when it grows. */
-const FIELD_RADIUS = 22;
-
-/** A brand-tinted glow, so the launcher lifts off the page without a grey box. */
-const LauncherShadow = Platform.select({
-  web: { boxShadow: '0 6px 16px rgba(10, 102, 194, 0.35)' } as object,
-  default: {
-    shadowColor: Palette.brand,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  } as object,
-});
+const INPUT_MIN = 36;
+const INPUT_MAX = 240;
 
 function suggestionsForLesson(title?: string): string[] {
   const t = (title || '').toLowerCase();
@@ -74,15 +64,13 @@ function suggestionsForLesson(title?: string): string[] {
 }
 
 /**
- * Docks itself to the bottom-right of whatever container it is dropped into.
- * On a wide screen the panel opens in place, leaving the lesson readable
- * behind it; on a phone it takes over as a bottom sheet.
+ * Panel only — the trigger lives in the lesson action bar, next to «Далее».
+ * On a wide screen it docks over the reading column; on a phone it is a sheet.
  */
-export function TutorChat({ lessonId, lessonTitle }: Props) {
+export function TutorChat({ lessonId, lessonTitle, open, onOpenChange }: Props) {
   const { isCompact } = useBreakpoint();
-
-  const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [inputHeight, setInputHeight] = useState(INPUT_MIN);
   const [focused, setFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -159,11 +147,11 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
   useEffect(() => {
     if (!open || Platform.OS !== 'web') return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') onOpenChange(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, onOpenChange]);
 
   /** `appendUser` is false when retrying: the question is already in the thread. */
   const ask = useCallback(
@@ -206,6 +194,7 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
     const text = (textOverride ?? input).trim();
     if (!text || sending) return;
     setInput('');
+    setInputHeight(INPUT_MIN);
     ask(text, true);
   }
 
@@ -215,23 +204,21 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
   const conversation = (
     <>
       <View style={styles.header}>
-        <AiBadge size={36} />
+        <View style={styles.headerMark}>
+          <Icon name="sparkle" size={16} color={Palette.brand} filled />
+        </View>
         <View style={styles.headerText}>
           <ThemedText type="smallBold">Наставник</ThemedText>
-          <View style={styles.status}>
-            <View style={styles.statusDot} />
-            <ThemedText type="meta" themeColor="textSecondary" numberOfLines={1}>
-              {lessonTitle || 'Отвечает по материалам урока'}
-            </ThemedText>
-          </View>
+          <ThemedText type="meta" themeColor="textSecondary" numberOfLines={1}>
+            По материалам урока
+          </ThemedText>
         </View>
         <Pressable
-          onPress={() => setOpen(false)}
+          onPress={() => onOpenChange(false)}
           accessibilityRole="button"
           accessibilityLabel="Закрыть чат"
-          hitSlop={8}
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
-          <Icon name="close" size={18} color={Palette.inkSoft} />
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}>
+          <Icon name="close" size={16} color={Palette.inkSoft} />
         </Pressable>
       </View>
 
@@ -249,14 +236,15 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
 
         {!loadingHistory && !hasThread ? (
           <View style={styles.empty}>
-            <AiBadge size={52} />
-            <ThemedText type="subtitle" style={styles.centerText}>
-              Спросите про этот урок
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
-              Отвечаю только по проверенным материалам курса и показываю источники.
-            </ThemedText>
-
+            <View style={[styles.row, styles.rowAi]}>
+              <AiBadge size={28} />
+              <View style={[styles.bubble, styles.bubbleAi]}>
+                <ThemedText type="smallBold">Спросите про этот урок</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Отвечаю по материалам курса и показываю источники.
+                </ThemedText>
+              </View>
+            </View>
             <View style={styles.chips}>
               {suggestions.map((s) => (
                 <Pressable
@@ -355,17 +343,29 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
       </ScrollView>
 
       <View style={styles.composer}>
-        <View style={[styles.field, focused && styles.fieldFocused]}>
+        <View style={[styles.bar, focused && styles.barFocused]}>
           <TextInput
             ref={inputRef}
             value={input}
-            onChangeText={setInput}
+            onChangeText={(text) => {
+              setInput(text);
+              if (!text) setInputHeight(INPUT_MIN);
+            }}
+            onContentSizeChange={(e) => {
+              if (Platform.OS === 'web') return;
+              const next = Math.ceil(e.nativeEvent.contentSize.height);
+              setInputHeight(Math.min(INPUT_MAX, Math.max(INPUT_MIN, next)));
+            }}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="Спросите про урок…"
+            placeholder="Спросите про урок"
             placeholderTextColor={Palette.inkFaint}
-            style={styles.input}
+            style={[
+              styles.input,
+              Platform.OS === 'web' ? styles.inputWeb : { height: inputHeight },
+            ]}
             multiline
+            scrollEnabled={inputHeight >= INPUT_MAX}
             editable={!sending}
             accessibilityLabel="Сообщение наставнику"
             // @ts-expect-error web-only key handling
@@ -386,12 +386,7 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
               canSend ? styles.sendOn : styles.sendOff,
               pressed && canSend && styles.sendPressed,
             ]}>
-            <Icon
-              name="send"
-              size={16}
-              color={canSend ? '#fff' : Palette.inkFaint}
-              filled={canSend}
-            />
+            <Icon name="send" size={16} color="#fff" filled />
           </Pressable>
         </View>
       </View>
@@ -400,96 +395,91 @@ export function TutorChat({ lessonId, lessonTitle }: Props) {
 
   if (isCompact) {
     return (
-      <>
-        <View style={styles.zoneCompact} pointerEvents="box-none">
-          {!open ? <Launcher compact onPress={() => setOpen(true)} /> : null}
-        </View>
+      <Modal
+        visible={mounted}
+        animationType="none"
+        transparent
+        onRequestClose={() => onOpenChange(false)}>
+        <KeyboardAvoidingView
+          style={styles.sheetRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Animated.View style={[styles.scrim, { opacity: anim }]}>
+            <Pressable
+              style={styles.scrimHit}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть чат"
+              onPress={() => onOpenChange(false)}
+            />
+          </Animated.View>
 
-        <Modal
-          visible={mounted}
-          animationType="none"
-          transparent
-          onRequestClose={() => setOpen(false)}>
-          <KeyboardAvoidingView
-            style={styles.sheetRoot}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <Animated.View style={[styles.scrim, { opacity: anim }]}>
-              <Pressable
-                style={styles.scrimHit}
-                accessibilityRole="button"
-                accessibilityLabel="Закрыть чат"
-                onPress={() => setOpen(false)}
-              />
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                styles.panel,
-                styles.panelSheet,
-                {
-                  transform: [
-                    {
-                      translateY: anim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [420, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}>
-              <View style={styles.handleZone}>
-                <View style={styles.handle} />
-              </View>
-              {conversation}
-            </Animated.View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </>
+          <Animated.View
+            style={[
+              styles.panel,
+              styles.panelSheet,
+              {
+                transform: [
+                  {
+                    translateY: anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [420, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <View style={styles.handleZone}>
+              <View style={styles.handle} />
+            </View>
+            {conversation}
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </Modal>
     );
   }
 
+  if (!mounted) return null;
+
   return (
     <View style={styles.zoneDock} pointerEvents="box-none">
-      {mounted ? (
-        <Animated.View
-          style={[
-            styles.panel,
-            styles.panelDock,
-            {
-              opacity: anim,
-              transform: [
-                {
-                  translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
-                },
-                {
-                  scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }),
-                },
-              ],
-            },
-          ]}>
-          {conversation}
-        </Animated.View>
-      ) : (
-        <Launcher onPress={() => setOpen(true)} />
-      )}
+      <Animated.View
+        style={[
+          styles.panel,
+          styles.panelDock,
+          {
+            opacity: anim,
+            transform: [
+              {
+                translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
+              },
+              {
+                scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }),
+              },
+            ],
+          },
+        ]}>
+        {conversation}
+      </Animated.View>
     </View>
   );
 }
 
-function Launcher({ compact, onPress }: { compact?: boolean; onPress: () => void }) {
+/** Lives in the lesson action bar, immediately left of «Далее». */
+export function TutorChatButton({ open, onPress }: { open: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Открыть чат с наставником"
-      style={({ pressed }) => [styles.launcher, pressed && styles.launcherPressed]}>
-      <View style={styles.launcherIcon}>
-        <Icon name="sparkle" size={18} color="#fff" filled />
-      </View>
-      <ThemedText type="smallBold" style={styles.launcherText}>
-        {compact ? 'Спросить' : 'Спросить наставника'}
+      accessibilityLabel={open ? 'Закрыть чат' : 'Открыть чат'}
+      accessibilityState={{ expanded: open }}
+      style={({ pressed }) => [
+        styles.askBtn,
+        open && styles.askBtnOn,
+        pressed && (open ? styles.askBtnOnPressed : styles.askBtnPressed),
+      ]}>
+      <Icon name="chat" size={18} color={open ? '#fff' : Palette.brand} filled={open} />
+      <ThemedText type="smallBold" style={open ? styles.askLabelOn : styles.askLabel}>
+        Чат
       </ThemedText>
-      {!compact ? <Icon name="chevronUp" size={16} color="rgba(255, 255, 255, 0.75)" /> : null}
     </Pressable>
   );
 }
@@ -568,12 +558,30 @@ const md = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  /** Anchored to the host container's bottom-right corner. */
-  zoneCompact: {
-    position: 'absolute',
-    right: Spacing.four,
-    bottom: Spacing.four,
+  askBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 36,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Palette.brand,
+    backgroundColor: 'transparent',
   },
+  askBtnOn: {
+    backgroundColor: Palette.brand,
+    borderColor: Palette.brand,
+  },
+  askBtnPressed: {
+    backgroundColor: Palette.brandWash,
+  },
+  askBtnOnPressed: {
+    backgroundColor: Palette.brandDeep,
+  },
+  askLabel: { color: Palette.brand },
+  askLabelOn: { color: '#fff' },
+
   zoneDock: {
     position: 'absolute',
     right: Spacing.four,
@@ -582,28 +590,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
   },
-
-  launcher: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingLeft: Spacing.one,
-    paddingRight: Spacing.four,
-    paddingVertical: Spacing.one,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.brand,
-    ...LauncherShadow,
-  },
-  launcherPressed: { backgroundColor: Palette.brandDeep },
-  launcherIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-  },
-  launcherText: { color: '#fff' },
 
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   scrim: {
@@ -629,10 +615,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.lg,
   },
   panelDock: {
-    width: 380,
+    width: 400,
     maxWidth: '100%',
-    height: 560,
-    maxHeight: '100%',
+    height: '100%',
     borderRadius: Radius.lg,
   },
   handleZone: {
@@ -652,27 +637,26 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
+    backgroundColor: Palette.surface,
     borderBottomWidth: 1,
     borderBottomColor: Palette.line,
   },
-  headerText: { flex: 1, gap: 1 },
-  status: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Palette.success,
-  },
-  iconBtn: {
+  headerMark: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.xs,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Palette.brandSoft,
+  },
+  headerText: { flex: 1, gap: 1 },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Palette.surfaceAlt,
   },
   pressed: { backgroundColor: Palette.surfaceHover },
 
@@ -682,7 +666,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.brand,
   },
 
-  thread: { flex: 1, backgroundColor: Palette.surface },
+  thread: { flex: 1, backgroundColor: Palette.paper },
   threadContent: {
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.four,
@@ -694,20 +678,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerText: { textAlign: 'center' },
   empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.two,
+    gap: Spacing.three,
   },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
     gap: Spacing.two,
-    marginTop: Spacing.three,
+    paddingLeft: 36,
   },
   chip: {
     paddingVertical: Spacing.two,
@@ -743,7 +721,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: Radius.xs,
   },
   bubbleAi: {
-    backgroundColor: Palette.surfaceAlt,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.line,
     borderBottomLeftRadius: Radius.xs,
   },
   userText: { color: '#fff' },
@@ -809,48 +789,65 @@ const styles = StyleSheet.create({
   },
 
   composer: {
-    padding: Spacing.three,
-    borderTopWidth: 1,
-    borderTopColor: Palette.line,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
     backgroundColor: Palette.surface,
   },
-  /** Filled capsule; the ring only appears on focus, so nothing shifts. */
-  field: {
+  bar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.two,
     paddingLeft: Spacing.four,
-    paddingRight: Spacing.one,
-    paddingVertical: Spacing.one,
-    borderRadius: FIELD_RADIUS,
-    borderWidth: 1.5,
-    borderColor: Palette.surfaceAlt,
-    backgroundColor: Palette.surfaceAlt,
-  },
-  fieldFocused: {
-    borderColor: Palette.brand,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: 22,
     backgroundColor: Palette.surface,
+    ...Platform.select({
+      web: { boxShadow: '0 0 0 1px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06)' } as object,
+      default: {
+        borderWidth: 1,
+        borderColor: Palette.lineStrong,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      } as object,
+    }),
+  },
+  barFocused: {
+    ...Platform.select({
+      web: { boxShadow: '0 0 0 1.5px rgba(10, 102, 194, 0.45), 0 2px 8px rgba(10, 102, 194, 0.12)' } as object,
+      default: { borderColor: Palette.brand } as object,
+    }),
   },
   input: {
     flex: 1,
-    minHeight: 34,
-    maxHeight: 116,
-    paddingVertical: Spacing.two,
+    paddingTop: 8,
+    paddingBottom: 8,
     color: Palette.ink,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 22,
     fontFamily: Fonts.sans as string,
-    // The capsule already signals focus; drop the browser's second outline.
-    ...(Platform.select({ web: { outlineStyle: 'none' }, default: {} }) as object),
   },
+  inputWeb: {
+    minHeight: INPUT_MIN,
+    maxHeight: INPUT_MAX,
+    height: 'auto',
+    outlineStyle: 'none',
+    resize: 'none',
+    overflow: 'auto',
+    fieldSizing: 'content',
+  } as object,
   send: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendOn: { backgroundColor: Palette.brand },
-  sendOff: { backgroundColor: 'transparent' },
+  sendOff: { backgroundColor: 'rgba(0, 0, 0, 0.22)' },
   sendPressed: { backgroundColor: Palette.brandDeep },
 });

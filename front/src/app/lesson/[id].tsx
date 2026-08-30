@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarkdownBody } from '@/components/markdown-body';
 import { SourceRefs } from '@/components/source-refs';
 import { ThemedText } from '@/components/themed-text';
-import { TutorChat } from '@/components/tutor-chat';
+import { TutorChat, TutorChatButton } from '@/components/tutor-chat';
 import { Atmosphere } from '@/components/ui/atmosphere';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export default function LessonScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [stepKey, setStepKey] = useState<StepKey>('theory');
 
   const scrollRef = useRef<ScrollView>(null);
@@ -69,6 +70,7 @@ export default function LessonScreen() {
     setScore(null);
     setResultMsg(null);
     setSourcesOpen(false);
+    setTutorOpen(false);
     setStepKey('theory');
     setLoading(true);
   }, [id]);
@@ -516,7 +518,14 @@ export default function LessonScreen() {
             </View>
           </ScrollView>
 
-          {!generating ? <TutorChat lessonId={lesson.id} lessonTitle={lesson.title} /> : null}
+          {!generating ? (
+            <TutorChat
+              lessonId={lesson.id}
+              lessonTitle={lesson.title}
+              open={tutorOpen}
+              onOpenChange={setTutorOpen}
+            />
+          ) : null}
         </View>
 
         {!generating && steps.length ? (
@@ -538,6 +547,7 @@ export default function LessonScreen() {
                     Ответьте на все вопросы
                   </ThemedText>
                 ) : null}
+                <TutorChatButton open={tutorOpen} onPress={() => setTutorOpen((v) => !v)} />
                 <Button
                   label={primaryAction.label}
                   onPress={primaryAction.onPress}
@@ -695,8 +705,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     padding: Spacing.four,
-    // Leave room for the docked tutor launcher over the last card.
-    paddingBottom: 88,
     gap: Spacing.two,
   },
   contentCompact: { paddingHorizontal: Spacing.two },
