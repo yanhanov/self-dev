@@ -11,7 +11,45 @@ import type {
 
 export function mockCourseOutline(req: CourseOutlineRequest): CourseOutlineResponse {
   const isDesign = req.profession_slug === "ui_ux_design";
+  const isDA = req.profession_slug === "data_analyst";
   const lang = req.preferred_language.startsWith("ru") ? "ru" : "en";
+
+  if (isDA) {
+    const lessons =
+      lang === "ru"
+        ? [
+            { title: "SQL: выборка и фильтры", summary: "SELECT, WHERE, ORDER BY" },
+            { title: "SQL: JOIN", summary: "INNER vs LEFT" },
+            { title: "SQL: агрегации", summary: "GROUP BY, HAVING" },
+            { title: "Excel: таблицы и формулы", summary: "XLOOKUP, SUMIF" },
+            { title: "Excel: Pivot Tables", summary: "Срезы и агрегации" },
+            { title: "Статистика: описательные меры", summary: "Mean, median, spread" },
+            { title: "Визуализация: выбор графика", summary: "Bar, line, scatter" },
+            { title: "Python: DataFrame", summary: "Фильтры и groupby" },
+            { title: "Бизнес: метрики и рекомендации", summary: "От вопроса к действию" },
+            { title: "Проект: E-commerce Revenue Analysis", summary: "Падение выручки на 12%" },
+          ]
+        : [
+            { title: "SQL: select and filters", summary: "SELECT, WHERE, ORDER BY" },
+            { title: "SQL: JOINs", summary: "INNER vs LEFT" },
+            { title: "SQL: aggregations", summary: "GROUP BY, HAVING" },
+            { title: "Excel: tables and formulas", summary: "XLOOKUP, SUMIF" },
+            { title: "Excel: Pivot Tables", summary: "Slices and aggregates" },
+            { title: "Stats: descriptive measures", summary: "Mean, median, spread" },
+            { title: "Visualization: chart choice", summary: "Bar, line, scatter" },
+            { title: "Python: DataFrame", summary: "Filters and groupby" },
+            { title: "Business: metrics and recommendations", summary: "Question to action" },
+            { title: "Project: E-commerce Revenue Analysis", summary: "12% revenue drop" },
+          ];
+    return {
+      title: lang === "ru" ? `Data Analyst: ${req.level_title}` : `Data Analyst: ${req.level_title}`,
+      summary:
+        lang === "ru"
+          ? `Персональный путь аналитика (~${req.weekly_hours} ч/нед).`
+          : `Personalized analyst path (~${req.weekly_hours} h/week).`,
+      lessons,
+    };
+  }
 
   if (isDesign) {
     const lessons =

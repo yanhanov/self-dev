@@ -17,6 +17,8 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 const NAV: Record<string, { label: string; icon: IconName }> = {
   today: { label: 'Сегодня', icon: 'home' },
   course: { label: 'Курс', icon: 'cap' },
+  progress: { label: 'Прогресс', icon: 'quiz' },
+  project: { label: 'Проект', icon: 'code' },
 };
 
 export default function AppTabs() {
@@ -29,6 +31,12 @@ export default function AppTabs() {
           </TabTrigger>
           <TabTrigger name="course" href="/course" asChild>
             <NavItem>course</NavItem>
+          </TabTrigger>
+          <TabTrigger name="progress" href="/progress" asChild>
+            <NavItem>progress</NavItem>
+          </TabTrigger>
+          <TabTrigger name="project" href="/project" asChild>
+            <NavItem>project</NavItem>
           </TabTrigger>
         </GlobalHeader>
       </TabList>

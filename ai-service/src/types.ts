@@ -124,6 +124,7 @@ export const TutorRequestSchema = z.object({
   message: z.string().min(1),
   lesson_title: z.string().optional().default(""),
   verified_context: z.array(VerifiedContextItemSchema).min(1),
+  learner_context: z.string().optional().default(""),
 });
 
 export type TutorRequest = z.infer<typeof TutorRequestSchema>;

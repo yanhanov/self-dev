@@ -19,3 +19,4 @@ rust_decimal = { version = "1", features = ["serde"] }
 anyhow = "1"
 thiserror = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }

@@ -1,5 +1,6 @@
 mod ai;
 mod config;
+mod curriculum;
 mod db;
 mod error;
 mod jobs;

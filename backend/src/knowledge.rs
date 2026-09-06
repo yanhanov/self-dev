@@ -98,6 +98,30 @@ fn expand_synonyms(raw: &str) -> Vec<String> {
         (&["модул", "module", "import"], &["modules", "import", "export"]),
         (&["async", "await", "промис", "promise", "fetch"], &["async", "promise", "fetch"]),
         (&["box model", "бокс", "margin", "padding"], &["box model", "margin", "padding"]),
+        (
+            &["sql", "эс кью эль", "запрос", "join", "джойн", "select"],
+            &["sql", "select", "join", "group by", "where"],
+        ),
+        (
+            &["excel", "эксель", "сводн", "pivot", "xlookup"],
+            &["excel", "pivot", "spreadsheet", "xlookup"],
+        ),
+        (
+            &["статистик", "median", "средн", "корреляц", "выброс"],
+            &["statistics", "mean", "median", "correlation", "variance"],
+        ),
+        (
+            &["pandas", "dataframe", "питон", "python"],
+            &["pandas", "dataframe", "python", "groupby"],
+        ),
+        (
+            &["график", "визуализ", "chart", "dashboard"],
+            &["chart", "visualization", "bar", "scatter"],
+        ),
+        (
+            &["выручк", "метрик", "kpi", "бизнес", "рекоменд"],
+            &["revenue", "metric", "business", "recommendation"],
+        ),
         (&["responsive", "адаптив", "медиа"], &["responsive", "media query"]),
     ];
 

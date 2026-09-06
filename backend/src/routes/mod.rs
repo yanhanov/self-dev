@@ -1,7 +1,12 @@
+mod assessment;
 mod courses;
 mod health;
 mod lessons;
+mod missions;
+mod practice;
 mod professions;
+mod projects;
+mod skills;
 mod today;
 mod tutor;
 mod users;
@@ -30,4 +35,41 @@ pub fn api_router() -> Router<AppState> {
         )
         .route("/api/users/{id}/tutor/chat", post(tutor::chat))
         .route("/api/users/{id}/tutor/history", get(tutor::history))
+        // Assessment
+        .route(
+            "/api/professions/{slug}/assessment",
+            get(assessment::get_for_profession),
+        )
+        .route("/api/users/{id}/assessment/start", post(assessment::start))
+        .route(
+            "/api/users/{id}/assessment/{attempt_id}/submit",
+            post(assessment::submit),
+        )
+        // Skills / roadmap / readiness
+        .route("/api/users/{id}/skills", get(skills::list_skills))
+        .route("/api/users/{id}/roadmap", get(skills::roadmap))
+        .route("/api/users/{id}/readiness", get(projects::readiness))
+        // Missions
+        .route("/api/users/{id}/missions/today", get(missions::today_mission))
+        .route(
+            "/api/users/{id}/missions/{user_mission_id}",
+            get(missions::get_mission),
+        )
+        .route(
+            "/api/users/{id}/missions/{user_mission_id}/advance",
+            post(missions::advance),
+        )
+        // SQL practice
+        .route("/api/practice/challenges/{slug}", get(practice::get_challenge))
+        .route(
+            "/api/users/{id}/practice/{challenge_id}/grade",
+            post(practice::grade),
+        )
+        // Portfolio
+        .route("/api/projects/{slug}", get(projects::get_project))
+        .route("/api/users/{id}/project", get(projects::get_user_project))
+        .route(
+            "/api/users/{id}/project/{user_project_id}/submit",
+            post(projects::submit),
+        )
 }

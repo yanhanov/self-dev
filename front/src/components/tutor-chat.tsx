@@ -30,7 +30,7 @@ type Message = {
 };
 
 type Props = {
-  lessonId: string;
+  lessonId?: string;
   lessonTitle?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -112,7 +112,7 @@ export function TutorChat({ lessonId, lessonTitle, open, onOpenChange }: Props) 
     if (!uid) return;
     setLoadingHistory(true);
     try {
-      const history = await api.tutorHistory(uid, lessonId);
+      const history = await api.tutorHistory(uid, lessonId || undefined);
       setMessages(
         history
           .slice()
@@ -170,7 +170,7 @@ export function TutorChat({ lessonId, lessonTitle, open, onOpenChange }: Props) 
       }
 
       try {
-        const res = await api.tutorChat(uid, text, lessonId);
+        const res = await api.tutorChat(uid, text, lessonId || undefined);
         setMessages((prev) => [
           ...prev,
           {

@@ -107,6 +107,8 @@ pub struct TutorGenRequest {
     pub message: String,
     pub lesson_title: String,
     pub verified_context: Vec<VerifiedContextItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learner_context: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

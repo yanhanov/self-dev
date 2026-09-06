@@ -195,10 +195,13 @@ export const api = {
       preferred_language?: string;
     }
   ) =>
-    request<{ status: string; job_id: string }>(`/api/users/${userId}/onboard`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+    request<{ status: string; job_id?: string; next?: string; assessment_slug?: string }>(
+      `/api/users/${userId}/onboard`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
   getCourse: (userId: string) => request<Course>(`/api/users/${userId}/course`),
   getLesson: (lessonId: string) => request<LessonDetail>(`/api/lessons/${lessonId}`),
   completeLesson: (
@@ -225,4 +228,212 @@ export const api = {
     if (lessonId) q.set('lesson_id', lessonId);
     return request<TutorHistoryItem[]>(`/api/users/${userId}/tutor/history?${q}`);
   },
+
+  getAssessment: (professionSlug: string) =>
+    request<{
+      assessment: {
+        id: string;
+        slug: string;
+        title: string;
+        description: string;
+        estimated_minutes: number;
+      };
+      items: {
+        id: string;
+        order_index: number;
+        item_type: string;
+        prompt: string;
+        options: string[];
+        skill_slug: string;
+        skill_title: string;
+      }[];
+    }>(`/api/professions/${professionSlug}/assessment`),
+
+  startAssessment: (userId: string, assessmentSlug?: string) =>
+    request<{ attempt_id: string; assessment_id: string; status: string }>(
+      `/api/users/${userId}/assessment/start`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ assessment_slug: assessmentSlug }),
+      }
+    ),
+
+  submitAssessment: (
+    userId: string,
+    attemptId: string,
+    answers: { item_id: string; selected_index?: number; answer_text?: string }[]
+  ) =>
+    request<{
+      overall_score: number;
+      skill_scores: Record<string, number>;
+      roadmap_preview: {
+        title: string;
+        skill: string;
+        intensity: string;
+        score: number | null;
+      }[];
+      job_id: string;
+    }>(`/api/users/${userId}/assessment/${attemptId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ answers }),
+    }),
+
+  getSkills: (userId: string) =>
+    request<{
+      skills: {
+        skill_id: string;
+        slug: string;
+        title: string;
+        score: number;
+        confidence: number;
+        order_index: number;
+      }[];
+      readiness: {
+        overall: number;
+        technical: number;
+        projects: number;
+        consistency: number;
+        gaps: { skill_slug: string; skill_title: string; score: number; hint: string }[];
+      };
+    }>(`/api/users/${userId}/skills`),
+
+  getRoadmap: (userId: string) =>
+    request<{
+      modules: {
+        id: string;
+        slug: string;
+        title: string;
+        summary: string;
+        skill_title: string;
+        intensity: string;
+        include: boolean;
+        user_score: number | null;
+        why: string;
+      }[];
+    }>(`/api/users/${userId}/roadmap`),
+
+  getTodayMission: (userId: string) =>
+    request<{
+      mission: TodayMission | null;
+      created?: boolean;
+      adaptation?: { focus_skill: string; reason: string } | null;
+      message?: string;
+    }>(`/api/users/${userId}/missions/today`),
+
+  advanceMission: (
+    userId: string,
+    userMissionId: string,
+    body: {
+      phase?: string;
+      challenge_passed?: boolean;
+      ai_feedback?: string;
+      complete?: boolean;
+    }
+  ) =>
+    request(`/api/users/${userId}/missions/${userMissionId}/advance`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getChallenge: (slug: string) =>
+    request<PracticeChallenge>(`/api/practice/challenges/${slug}`),
+
+  gradeChallenge: (
+    userId: string,
+    challengeId: string,
+    body: {
+      submitted_sql: string;
+      result_rows: unknown;
+      user_mission_id?: string;
+    }
+  ) =>
+    request<{ is_correct: boolean; feedback: string }>(
+      `/api/users/${userId}/practice/${challengeId}/grade`,
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
+
+  getUserProject: (userId: string) =>
+    request<{
+      project: UserProject | null;
+      missions_completed: number;
+    }>(`/api/users/${userId}/project`),
+
+  submitProject: (
+    userId: string,
+    userProjectId: string,
+    body: { sql_submission: string; reasoning_text: string; sql_correct?: boolean }
+  ) =>
+    request<{
+      overall_score: number;
+      feedback: string;
+      readiness: {
+        overall: number;
+        technical: number;
+        projects: number;
+        consistency: number;
+        gaps: { skill_title: string; hint: string }[];
+      };
+    }>(`/api/users/${userId}/project/${userProjectId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getReadiness: (userId: string) =>
+    request<{
+      overall: number;
+      technical: number;
+      projects: number;
+      consistency: number;
+      gaps: { skill_slug: string; skill_title: string; score: number; hint: string }[];
+    }>(`/api/users/${userId}/readiness`),
+};
+
+export type TodayMission = {
+  id: string;
+  mission_id: string;
+  status: string;
+  current_phase: string;
+  challenge_passed: boolean;
+  ai_feedback: string;
+  title: string;
+  goal: string;
+  estimated_minutes: number;
+  concept_markdown: string;
+  guided_markdown: string;
+  skill_slug: string;
+  skill_title: string;
+  challenge_id?: string | null;
+  challenge_slug?: string | null;
+};
+
+export type PracticeChallenge = {
+  id: string;
+  slug: string;
+  title: string;
+  prompt: string;
+  difficulty: number;
+  starter_sql: string;
+  sort_ignore: boolean;
+  hints: string[];
+  dataset_slug: string;
+  dataset_title: string;
+  setup_sql: string;
+  skill_slug?: string | null;
+};
+
+export type UserProject = {
+  id: string;
+  project_id: string;
+  status: string;
+  sql_submission?: string | null;
+  reasoning_text?: string | null;
+  sql_score?: number | null;
+  reasoning_score?: number | null;
+  overall_score?: number | null;
+  ai_feedback: string;
+  title: string;
+  slug: string;
+  brief_markdown: string;
+  challenge_slug?: string | null;
+  challenge_id?: string | null;
 };

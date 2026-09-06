@@ -6,6 +6,7 @@ use crate::ai::{
     AiClient, CourseOutlineRequest, DailyPlanGenRequest, LessonGenRequest,
     VerifiedContextItem,
 };
+use crate::curriculum::{self, PlannedLesson};
 use crate::knowledge::{self, MIN_LESSON_CHUNKS};
 
 pub async fn run_course_outline_job(
@@ -89,17 +90,54 @@ async fn generate_course_outline_inner(
     .fetch_one(pool)
     .await?;
 
-    let outline = ai
-        .generate_course_outline(&CourseOutlineRequest {
-            profession_slug: ctx.profession_slug.clone(),
-            profession_title: ctx.profession_title.clone(),
-            level_slug: ctx.level_slug.clone(),
-            level_title: ctx.level_title.clone(),
-            level_description: ctx.level_description.clone(),
-            preferred_language: ctx.preferred_language.clone(),
-            weekly_hours: ctx.weekly_hours as i32,
-        })
-        .await?;
+    // Data Analyst: authored gap-based modules. Others: AI outline.
+    let (title, summary, lesson_specs): (String, String, Vec<LessonSpec>) =
+        if ctx.profession_slug == "data_analyst" {
+            let planned = curriculum::plan_modules_for_user(pool, user_id, ctx.profession_id).await?;
+            let included: Vec<&PlannedLesson> = planned.iter().filter(|p| p.include).collect();
+            let title = "Data Analyst: путь под ваши gaps".to_string();
+            let summary = format!(
+                "Персональный roadmap: {} модулей (пропущено {} сильных зон). ~{} ч/нед.",
+                included.len(),
+                planned.len().saturating_sub(included.len()),
+                ctx.weekly_hours
+            );
+            let specs = included
+                .into_iter()
+                .map(|p| LessonSpec {
+                    title: p.module.title.clone(),
+                    summary: format!("{} · режим {}", p.module.summary, p.intensity),
+                    skill_id: Some(p.module.skill_id),
+                    module_id: Some(p.module.id),
+                    intensity: Some(p.intensity.to_string()),
+                })
+                .collect();
+            (title, summary, specs)
+        } else {
+            let outline = ai
+                .generate_course_outline(&CourseOutlineRequest {
+                    profession_slug: ctx.profession_slug.clone(),
+                    profession_title: ctx.profession_title.clone(),
+                    level_slug: ctx.level_slug.clone(),
+                    level_title: ctx.level_title.clone(),
+                    level_description: ctx.level_description.clone(),
+                    preferred_language: ctx.preferred_language.clone(),
+                    weekly_hours: ctx.weekly_hours as i32,
+                })
+                .await?;
+            let specs = outline
+                .lessons
+                .into_iter()
+                .map(|l| LessonSpec {
+                    title: l.title,
+                    summary: l.summary,
+                    skill_id: None,
+                    module_id: None,
+                    intensity: None,
+                })
+                .collect();
+            (outline.title, outline.summary, specs)
+        };
 
     let mut tx = pool.begin().await?;
 
@@ -118,20 +156,26 @@ async fn generate_course_outline_inner(
     .bind(user_id)
     .bind(ctx.profession_id)
     .bind(ctx.skill_level_id)
-    .bind(&outline.title)
-    .bind(&outline.summary)
-    .bind(outline.lessons.len() as i32)
+    .bind(&title)
+    .bind(&summary)
+    .bind(lesson_specs.len() as i32)
     .fetch_one(&mut *tx)
     .await?;
 
     let mut first_lesson_id: Option<Uuid> = None;
 
-    for (idx, lesson) in outline.lessons.iter().enumerate() {
+    for (idx, lesson) in lesson_specs.iter().enumerate() {
         let status = if idx == 0 { "generating" } else { "locked" };
         let lesson_id: Uuid = sqlx::query_scalar(
             r#"
-            INSERT INTO lessons (course_id, order_index, title, summary, status)
-            VALUES ($1, $2, $3, $4, $5::lesson_status)
+            INSERT INTO lessons (
+                course_id, order_index, title, summary, status,
+                skill_id, module_id, intensity
+            )
+            VALUES (
+                $1, $2, $3, $4, $5::lesson_status,
+                $6, $7, $8::module_intensity
+            )
             RETURNING id
             "#,
         )
@@ -140,6 +184,9 @@ async fn generate_course_outline_inner(
         .bind(&lesson.title)
         .bind(&lesson.summary)
         .bind(status)
+        .bind(lesson.skill_id)
+        .bind(lesson.module_id)
+        .bind(lesson.intensity.as_deref())
         .fetch_one(&mut *tx)
         .await?;
 
@@ -156,7 +203,7 @@ async fn generate_course_outline_inner(
         "#,
     )
     .bind(job_id)
-    .bind(json!({ "course_id": course_id, "lessons": outline.lessons.len() }))
+    .bind(json!({ "course_id": course_id, "lessons": lesson_specs.len() }))
     .execute(&mut *tx)
     .await?;
 
@@ -184,6 +231,14 @@ async fn generate_course_outline_inner(
     }
 
     Ok(())
+}
+
+struct LessonSpec {
+    title: String,
+    summary: String,
+    skill_id: Option<Uuid>,
+    module_id: Option<Uuid>,
+    intensity: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]

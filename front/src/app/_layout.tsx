@@ -26,6 +26,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Palette.paper } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" options={{ presentation: 'card' }} />
+        <Stack.Screen name="assessment" options={{ presentation: 'card' }} />
         <Stack.Screen name="lesson/[id]" options={{ presentation: 'card' }} />
       </Stack>
     </ThemeProvider>

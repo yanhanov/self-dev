@@ -9,9 +9,7 @@ import { api } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
 /**
- * Entry redirect. A finished course drops the user straight into the daily
- * plan; a course still being written lands on the course page where the
- * generation progress is visible.
+ * Entry redirect. Finished course → today; otherwise course / assessment / onboarding.
  */
 export default function HomeScreen() {
   useEffect(() => {
@@ -22,8 +20,28 @@ export default function HomeScreen() {
         return;
       }
       try {
+        const skills = await api.getSkills(userId).catch(() => null);
+        if (skills && skills.skills.every((s) => s.score === 0) && skills.skills.length > 0) {
+          // Likely DA without assessment scores — check course
+        }
         const course = await api.getCourse(userId);
-        router.replace(course.generation_status === 'ready' ? '/today' : '/course');
+        if (course.generation_status === 'ready') {
+          router.replace('/today');
+          return;
+        }
+        // If DA profile exists but no course yet → assessment
+        if (!course.id || course.generation_status === 'pending') {
+          try {
+            await api.getAssessment('data_analyst');
+            if (course.profession_slug === 'data_analyst' && !course.id) {
+              router.replace('/assessment');
+              return;
+            }
+          } catch {
+            // no assessment for this profession
+          }
+        }
+        router.replace('/course');
       } catch {
         router.replace('/onboarding');
       }

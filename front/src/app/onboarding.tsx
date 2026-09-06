@@ -59,6 +59,8 @@ export default function OnboardingScreen() {
       .then(([p, l]) => {
         setProfessions(p);
         setLevels(l);
+        const da = p.find((x) => x.slug === 'data_analyst');
+        if (da) setProfessionSlug(da.slug);
       })
       .catch((e) => setError(friendlyError(e)))
       .finally(() => setLoading(false));
@@ -80,13 +82,17 @@ export default function OnboardingScreen() {
     try {
       const user = await api.createUser(email.trim(), name.trim() || undefined);
       await setStoredUser(user.id, user.email);
-      await api.onboard(user.id, {
+      const onboard = await api.onboard(user.id, {
         profession_slug: professionSlug,
         level_slug: levelSlug,
         weekly_hours: weeklyHours,
         preferred_language: 'ru',
       });
-      router.replace('/course');
+      if (onboard.next === 'assessment' || professionSlug === 'data_analyst') {
+        router.replace('/assessment');
+      } else {
+        router.replace('/course');
+      }
     } catch (e) {
       setError(friendlyError(e));
     } finally {

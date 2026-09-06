@@ -81,15 +81,16 @@ pub async fn onboard(
         r#"
         INSERT INTO user_profiles (
             user_id, profession_id, skill_level_id, weekly_hours,
-            preferred_language, generation_status, updated_at
+            preferred_language, generation_status, assessment_completed, updated_at
         )
-        VALUES ($1, $2, $3, $4, COALESCE($5, 'ru'), 'pending', now())
+        VALUES ($1, $2, $3, $4, COALESCE($5, 'ru'), $6, false, now())
         ON CONFLICT (user_id) DO UPDATE SET
             profession_id = EXCLUDED.profession_id,
             skill_level_id = EXCLUDED.skill_level_id,
             weekly_hours = EXCLUDED.weekly_hours,
             preferred_language = EXCLUDED.preferred_language,
-            generation_status = 'pending',
+            generation_status = EXCLUDED.generation_status,
+            assessment_completed = false,
             updated_at = now()
         "#,
     )
@@ -98,8 +99,26 @@ pub async fn onboard(
     .bind(level_id)
     .bind(body.weekly_hours)
     .bind(&body.preferred_language)
+    .bind(if body.profession_slug == "data_analyst" {
+        "pending"
+    } else {
+        "pending"
+    })
     .execute(&state.pool)
     .await?;
+
+    // Data Analyst: assessment first, then course. Other professions: generate now.
+    if body.profession_slug == "data_analyst" {
+        return Ok((
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "status": "accepted",
+                "next": "assessment",
+                "assessment_slug": "da_baseline",
+                "generation_status": "pending"
+            })),
+        ));
+    }
 
     let job_id: Uuid = sqlx::query_scalar(
         r#"
@@ -127,6 +146,7 @@ pub async fn onboard(
         Json(json!({
             "status": "accepted",
             "job_id": job_id,
+            "next": "course",
             "generation_status": "pending"
         })),
     ))
