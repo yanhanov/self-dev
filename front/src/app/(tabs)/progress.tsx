@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 
 import { AppShell } from '@/components/layout/app-shell';
 import { ThemedText } from '@/components/themed-text';

@@ -310,19 +310,17 @@ pub async fn submit(
         run_course_outline_job(pool, ai, user_id, job_id).await;
     });
 
-    let skills = curriculum::plan_modules_for_user(
-        &state.pool,
-        user_id,
-        sqlx::query_scalar(
-            "SELECT profession_id FROM user_profiles WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_one(&state.pool)
-        .await?
-        .ok_or(AppError::NotFound)?,
+    let profession_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT profession_id FROM user_profiles WHERE user_id = $1",
     )
-    .await
-    .map_err(AppError::Other)?;
+    .bind(user_id)
+    .fetch_one(&state.pool)
+    .await?;
+    let profession_id = profession_id.ok_or(AppError::NotFound)?;
+
+    let skills = curriculum::plan_modules_for_user(&state.pool, user_id, profession_id)
+        .await
+        .map_err(AppError::Other)?;
 
     Ok(Json(json!({
         "attempt_id": attempt_id,

@@ -27,7 +27,7 @@ struct MissionRow {
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-struct UserMissionRow {
+pub struct UserMissionRow {
     id: Uuid,
     mission_id: Uuid,
     plan_date: NaiveDate,

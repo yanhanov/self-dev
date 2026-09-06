@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 
 import { CourseRail } from '@/components/course-rail';
 import { AppShell } from '@/components/layout/app-shell';
@@ -118,8 +118,8 @@ export default function TodayScreen() {
               Навык обновлён. Завтра будет следующая миссия — или откройте проект / прогресс.
             </ThemedText>
             <View style={styles.row}>
-              <Button label="Прогресс" onPress={() => router.push('/progress')} />
-              <Button label="Проект" variant="secondary" onPress={() => router.push('/project')} />
+              <Button label="Прогресс" onPress={() => router.push('/progress' as Href)} />
+              <Button label="Проект" variant="secondary" onPress={() => router.push('/project' as Href)} />
             </View>
           </Card>
         ) : null}
@@ -132,7 +132,7 @@ export default function TodayScreen() {
             </ThemedText>
             <View style={styles.row}>
               <Button label="Курс" onPress={() => router.push('/course')} />
-              <Button label="Проект" variant="secondary" onPress={() => router.push('/project')} />
+              <Button label="Проект" variant="secondary" onPress={() => router.push('/project' as Href)} />
             </View>
           </Card>
         ) : null}

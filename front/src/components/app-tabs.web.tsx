@@ -6,6 +6,7 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
+import type { Href } from 'expo-router';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from './themed-text';
@@ -32,10 +33,10 @@ export default function AppTabs() {
           <TabTrigger name="course" href="/course" asChild>
             <NavItem>course</NavItem>
           </TabTrigger>
-          <TabTrigger name="progress" href="/progress" asChild>
+          <TabTrigger name="progress" href={'/progress' as Href} asChild>
             <NavItem>progress</NavItem>
           </TabTrigger>
-          <TabTrigger name="project" href="/project" asChild>
+          <TabTrigger name="project" href={'/project' as Href} asChild>
             <NavItem>project</NavItem>
           </TabTrigger>
         </GlobalHeader>

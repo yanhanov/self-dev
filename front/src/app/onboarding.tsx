@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -89,7 +89,7 @@ export default function OnboardingScreen() {
         preferred_language: 'ru',
       });
       if (onboard.next === 'assessment' || professionSlug === 'data_analyst') {
-        router.replace('/assessment');
+        router.replace('/assessment' as Href);
       } else {
         router.replace('/course');
       }

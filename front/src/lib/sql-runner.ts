@@ -1,26 +1,15 @@
-import type { Database } from 'sql.js';
-
 export type SqlRow = Record<string, string | number | null>;
-
-let sqlPromise: Promise<typeof import('sql.js')> | null = null;
-
-async function loadSqlJs() {
-  if (!sqlPromise) {
-    sqlPromise = import('sql.js');
-  }
-  const mod = await sqlPromise;
-  const initSqlJs = mod.default;
-  return initSqlJs({
-    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
-  });
-}
 
 export async function runPracticeQuery(
   setupSql: string,
   query: string
 ): Promise<{ rows: SqlRow[]; columns: string[] }> {
-  const SQL = await loadSqlJs();
-  const db: Database = new SQL.Database();
+  const mod = await import('sql.js');
+  const initSqlJs = mod.default;
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+  });
+  const db = new SQL.Database();
   try {
     db.run(setupSql);
     const result = db.exec(query);

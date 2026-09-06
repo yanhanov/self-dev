@@ -1,10 +1,11 @@
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 
 import { AppShell } from '@/components/layout/app-shell';
 import { MarkdownBody } from '@/components/markdown-body';
@@ -176,7 +177,7 @@ export default function ProjectScreen() {
                 Career Readiness сейчас {Math.round(result.readiness.overall)}%
               </ThemedText>
             ) : null}
-            <Button label="Смотреть прогресс" onPress={() => router.push('/progress')} />
+            <Button label="Смотреть прогресс" onPress={() => router.push('/progress' as Href)} />
           </Card>
         ) : null}
 

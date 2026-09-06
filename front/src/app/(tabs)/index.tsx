@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
@@ -34,7 +34,7 @@ export default function HomeScreen() {
           try {
             await api.getAssessment('data_analyst');
             if (course.profession_slug === 'data_analyst' && !course.id) {
-              router.replace('/assessment');
+              router.replace('/assessment' as Href);
               return;
             }
           } catch {

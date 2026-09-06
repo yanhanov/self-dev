@@ -171,7 +171,7 @@ pub async fn submit(
 
     // Simple rubric for reasoning length / keywords
     let text = body.reasoning_text.to_lowercase();
-    let mut reasoning_score = 10.0;
+    let mut reasoning_score: f64 = 10.0;
     if body.reasoning_text.split_whitespace().count() >= 40 {
         reasoning_score += 10.0;
     }
@@ -180,7 +180,7 @@ pub async fn submit(
             reasoning_score += 4.0;
         }
     }
-    reasoning_score = reasoning_score.min(40.0);
+    reasoning_score = reasoning_score.min(40.0_f64);
     let overall = sql_score + reasoning_score;
 
     let feedback = if sql_correct {
