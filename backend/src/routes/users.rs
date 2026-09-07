@@ -21,7 +21,8 @@ pub struct CreateUserRequest {
 #[derive(Debug, Deserialize)]
 pub struct OnboardRequest {
     pub profession_slug: String,
-    pub level_slug: String,
+    /// Optional — for Data Analyst, skills come from assessment, not self-report.
+    pub level_slug: Option<String>,
     pub weekly_hours: Option<i16>,
     pub preferred_language: Option<String>,
 }
@@ -69,13 +70,19 @@ pub async fn onboard(
         AppError::BadRequest(format!("unknown profession: {}", body.profession_slug))
     })?;
 
+    let level_slug = body
+        .level_slug
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("complete_beginner");
+
     let level_id: Option<Uuid> =
         sqlx::query_scalar("SELECT id FROM skill_levels WHERE slug = $1")
-            .bind(&body.level_slug)
+            .bind(level_slug)
             .fetch_optional(&state.pool)
             .await?;
     let level_id =
-        level_id.ok_or_else(|| AppError::BadRequest(format!("unknown level: {}", body.level_slug)))?;
+        level_id.ok_or_else(|| AppError::BadRequest(format!("unknown level: {level_slug}")))?;
 
     sqlx::query(
         r#"
@@ -83,13 +90,16 @@ pub async fn onboard(
             user_id, profession_id, skill_level_id, weekly_hours,
             preferred_language, generation_status, assessment_completed, updated_at
         )
-        VALUES ($1, $2, $3, $4, COALESCE($5, 'ru'), $6, false, now())
+        VALUES (
+            $1, $2, $3, $4, COALESCE($5, 'ru'),
+            'pending'::generation_status, false, now()
+        )
         ON CONFLICT (user_id) DO UPDATE SET
             profession_id = EXCLUDED.profession_id,
             skill_level_id = EXCLUDED.skill_level_id,
             weekly_hours = EXCLUDED.weekly_hours,
             preferred_language = EXCLUDED.preferred_language,
-            generation_status = EXCLUDED.generation_status,
+            generation_status = 'pending'::generation_status,
             assessment_completed = false,
             updated_at = now()
         "#,
@@ -99,15 +109,10 @@ pub async fn onboard(
     .bind(level_id)
     .bind(body.weekly_hours)
     .bind(&body.preferred_language)
-    .bind(if body.profession_slug == "data_analyst" {
-        "pending"
-    } else {
-        "pending"
-    })
     .execute(&state.pool)
     .await?;
 
-    // Data Analyst: assessment first, then course. Other professions: generate now.
+    // Data Analyst MVP loop: assessment → skill graph → roadmap (no self-level).
     if body.profession_slug == "data_analyst" {
         return Ok((
             StatusCode::ACCEPTED,
@@ -130,7 +135,7 @@ pub async fn onboard(
     .bind(user_id)
     .bind(json!({
         "profession_slug": body.profession_slug,
-        "level_slug": body.level_slug,
+        "level_slug": level_slug,
     }))
     .fetch_one(&state.pool)
     .await?;

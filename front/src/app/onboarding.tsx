@@ -15,11 +15,28 @@ import { Layout, Palette, Radius, Spacing } from '@/constants/theme';
 import { api, friendlyError, Profession, SkillLevel } from '@/lib/api';
 import { setStoredUser } from '@/store/user';
 
-type Step = 0 | 1 | 2;
+/**
+ * MVP onboarding follows CareerOS plan:
+ *   Goal → Contact & rhythm → Skill Assessment (for Data Analyst)
+ * Self-reported "level" is skipped for DA — assessment replaces it.
+ */
 
 const HOUR_OPTIONS = [5, 8, 12, 20];
 
-const STEPS: { title: string; hint: string; incomplete: string }[] = [
+const DA_STEPS = [
+  {
+    title: 'Кем вы хотите стать?',
+    hint: 'Первый vertical — Data Analyst. От цели к job-ready маршруту.',
+    incomplete: 'Выберите направление, чтобы продолжить',
+  },
+  {
+    title: 'Контакт и ритм',
+    hint: 'Сохраним прогресс. Дальше — проверка навыков (~20 мин), не самооценка.',
+    incomplete: 'Укажите email, чтобы начать assessment',
+  },
+] as const;
+
+const OTHER_STEPS = [
   {
     title: 'Кем вы хотите стать?',
     hint: 'Выберите направление — программа соберётся под него.',
@@ -35,47 +52,66 @@ const STEPS: { title: string; hint: string; incomplete: string }[] = [
     hint: 'Последний шаг — сохраним прогресс и рассчитаем нагрузку.',
     incomplete: 'Укажите email, чтобы собрать курс',
   },
-];
+] as const;
 
 function isEmailValid(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 export default function OnboardingScreen() {
-  const [step, setStep] = useState<Step>(0);
+  const [step, setStep] = useState(0);
   const [professions, setProfessions] = useState<Profession[]>([]);
   const [levels, setLevels] = useState<SkillLevel[]>([]);
-  const [professionSlug, setProfessionSlug] = useState<string | null>(null);
+  const [professionSlug, setProfessionSlug] = useState<string | null>('data_analyst');
   const [levelSlug, setLevelSlug] = useState<string | null>(null);
-  const [weeklyHours, setWeeklyHours] = useState(12);
+  const [weeklyHours, setWeeklyHours] = useState(8);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isDa = professionSlug === 'data_analyst';
+  const steps = isDa ? DA_STEPS : OTHER_STEPS;
+  const maxStep = steps.length - 1;
+
   useEffect(() => {
     Promise.all([api.getProfessions(), api.getSkillLevels()])
       .then(([p, l]) => {
         setProfessions(p);
         setLevels(l);
-        const da = p.find((x) => x.slug === 'data_analyst');
-        if (da) setProfessionSlug(da.slug);
+        if (!p.some((x) => x.slug === 'data_analyst') && p[0]) {
+          setProfessionSlug(p[0].slug);
+        }
       })
       .catch((e) => setError(friendlyError(e)))
       .finally(() => setLoading(false));
   }, []);
+
+  // Reset step when switching DA ↔ other (different step counts)
+  useEffect(() => {
+    setStep(0);
+    if (isDa) setLevelSlug(null);
+  }, [isDa]);
 
   const selectedProfession = useMemo(
     () => professions.find((p) => p.slug === professionSlug),
     [professions, professionSlug]
   );
 
-  const stepComplete =
-    step === 0 ? !!professionSlug : step === 1 ? !!levelSlug : isEmailValid(email);
+  const stepComplete = isDa
+    ? step === 0
+      ? !!professionSlug
+      : isEmailValid(email)
+    : step === 0
+      ? !!professionSlug
+      : step === 1
+        ? !!levelSlug
+        : isEmailValid(email);
 
   async function onSubmit() {
-    if (!professionSlug || !levelSlug || !isEmailValid(email)) return;
+    if (!professionSlug || !isEmailValid(email)) return;
+    if (!isDa && !levelSlug) return;
 
     setSubmitting(true);
     setError(null);
@@ -84,7 +120,7 @@ export default function OnboardingScreen() {
       await setStoredUser(user.id, user.email);
       const onboard = await api.onboard(user.id, {
         profession_slug: professionSlug,
-        level_slug: levelSlug,
+        level_slug: isDa ? undefined : levelSlug || undefined,
         weekly_hours: weeklyHours,
         preferred_language: 'ru',
       });
@@ -103,19 +139,29 @@ export default function OnboardingScreen() {
   function next() {
     if (!stepComplete) return;
     setError(null);
-    if (step < 2) setStep((s) => (s + 1) as Step);
+    if (step < maxStep) setStep((s) => s + 1);
     else onSubmit();
   }
 
   function back() {
     setError(null);
     if (step > 0) {
-      setStep((s) => (s - 1) as Step);
+      setStep((s) => s - 1);
       return;
     }
     if (router.canGoBack()) router.back();
     else router.replace('/course');
   }
+
+  const ctaLabel = submitting
+    ? isDa
+      ? 'Открываем assessment…'
+      : 'Собираем курс…'
+    : step === maxStep
+      ? isDa
+        ? 'Пройти проверку навыков'
+        : 'Собрать мой курс'
+      : 'Далее';
 
   if (loading) {
     return (
@@ -141,11 +187,11 @@ export default function OnboardingScreen() {
               <ThemedText type="smallBold">SelfDev</ThemedText>
             </View>
             <ThemedText type="meta" themeColor="textSecondary">
-              Шаг {step + 1} из {STEPS.length}
+              Шаг {step + 1} из {steps.length}
             </ThemedText>
           </View>
           <View style={styles.stepTrack}>
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <View key={s.title} style={[styles.stepSeg, i <= step && styles.stepSegOn]} />
             ))}
           </View>
@@ -157,9 +203,9 @@ export default function OnboardingScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
             <View style={styles.intro}>
-              <ThemedText type="title">{STEPS[step].title}</ThemedText>
+              <ThemedText type="title">{steps[step].title}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                {STEPS[step].hint}
+                {steps[step].hint}
               </ThemedText>
             </View>
 
@@ -167,6 +213,7 @@ export default function OnboardingScreen() {
               <View style={styles.stack}>
                 {professions.map((p) => {
                   const selected = professionSlug === p.slug;
+                  const isPrimary = p.slug === 'data_analyst';
                   return (
                     <Pressable
                       key={p.id}
@@ -180,7 +227,14 @@ export default function OnboardingScreen() {
                       ]}>
                       <Avatar label={p.title} size={44} tone={selected ? 'brand' : 'neutral'} />
                       <View style={styles.optionCopy}>
-                        <ThemedText type="subtitle">{p.title}</ThemedText>
+                        <View style={styles.titleRow}>
+                          <ThemedText type="subtitle">{p.title}</ThemedText>
+                          {isPrimary ? (
+                            <ThemedText type="meta" style={styles.badge}>
+                              MVP
+                            </ThemedText>
+                          ) : null}
+                        </View>
                         <ThemedText type="small" themeColor="textSecondary">
                           {p.description}
                         </ThemedText>
@@ -191,10 +245,19 @@ export default function OnboardingScreen() {
                     </Pressable>
                   );
                 })}
+                {isDa ? (
+                  <Card>
+                    <ThemedText type="smallBold">Что дальше</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Skill Assessment → Skill Graph → персональный roadmap → ежедневные missions.
+                      Уровень мы не спрашиваем — измерим задачами.
+                    </ThemedText>
+                  </Card>
+                ) : null}
               </View>
             ) : null}
 
-            {step === 1 ? (
+            {!isDa && step === 1 ? (
               <View style={styles.stack}>
                 {selectedProfession ? (
                   <View style={styles.contextRow}>
@@ -216,7 +279,7 @@ export default function OnboardingScreen() {
               </View>
             ) : null}
 
-            {step === 2 ? (
+            {(isDa && step === 1) || (!isDa && step === 2) ? (
               <Card>
                 <View style={styles.form}>
                   <FieldInput
@@ -235,7 +298,7 @@ export default function OnboardingScreen() {
                     keyboardType="email-address"
                     returnKeyType="done"
                     onSubmitEditing={next}
-                    hint="Нужен, чтобы сохранить курс и прогресс."
+                    hint="Нужен, чтобы сохранить прогресс и skill graph."
                     error={
                       email.length > 0 && !isEmailValid(email) ? 'Проверьте формат email' : undefined
                     }
@@ -289,11 +352,11 @@ export default function OnboardingScreen() {
             <View style={styles.footerRight}>
               {!stepComplete ? (
                 <ThemedText type="meta" themeColor="textSecondary" style={styles.footerHint}>
-                  {STEPS[step].incomplete}
+                  {steps[step].incomplete}
                 </ThemedText>
               ) : null}
               <Button
-                label={submitting ? 'Собираем курс…' : step === 2 ? 'Собрать мой курс' : 'Далее'}
+                label={ctaLabel}
                 size="lg"
                 onPress={next}
                 disabled={submitting || !stepComplete}
@@ -367,6 +430,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingBottom: Spacing.one,
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  badge: {
+    color: Palette.brandDeep,
+    backgroundColor: Palette.brandSoft,
+    overflow: 'hidden',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
   },
   pressed: { backgroundColor: Palette.surfaceAlt },
   option: {

@@ -222,7 +222,7 @@ FROM (
     -- Python (15)
     (15, 'python-data',
      'В pandas как отфильтровать строки, где revenue > 100?',
-     $$["df[df["revenue"] > 100]","df.filter(revenue > 100)","SELECT * FROM df WHERE revenue > 100","df.where.revenue"]$$,
+     '["df[df.revenue > 100]","df.filter(revenue > 100)","SELECT * FROM df WHERE revenue > 100","df.where.revenue"]',
      0,
      'Булева маска — основной способ фильтрации DataFrame.')
 ) AS v(ord, skill_slug, prompt, options, correct, explanation)

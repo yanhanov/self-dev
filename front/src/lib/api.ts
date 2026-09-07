@@ -190,7 +190,7 @@ export const api = {
     userId: string,
     body: {
       profession_slug: string;
-      level_slug: string;
+      level_slug?: string;
       weekly_hours?: number;
       preferred_language?: string;
     }
