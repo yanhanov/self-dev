@@ -99,28 +99,28 @@ fn expand_synonyms(raw: &str) -> Vec<String> {
         (&["async", "await", "промис", "promise", "fetch"], &["async", "promise", "fetch"]),
         (&["box model", "бокс", "margin", "padding"], &["box model", "margin", "padding"]),
         (
-            &["sql", "эс кью эль", "запрос", "join", "джойн", "select"],
-            &["sql", "select", "join", "group by", "where"],
+            &["sql", "эс кью эль", "запрос", "join", "джойн", "select", "агрегац", "group by", "having", "подзапрос", "cte"],
+            &["sql", "select", "join", "group by", "having", "where", "subquery", "cte", "aggregation"],
         ),
         (
-            &["excel", "эксель", "сводн", "pivot", "xlookup"],
-            &["excel", "pivot", "spreadsheet", "xlookup"],
+            &["excel", "эксель", "сводн", "pivot", "xlookup", "vlookup", "sumif"],
+            &["excel", "pivot", "spreadsheet", "xlookup", "sumif", "table"],
         ),
         (
-            &["статистик", "median", "средн", "корреляц", "выброс"],
-            &["statistics", "mean", "median", "correlation", "variance"],
+            &["статистик", "median", "средн", "корреляц", "выброс", "дисперси", "распредел"],
+            &["statistics", "mean", "median", "correlation", "variance", "distribution", "outlier"],
         ),
         (
-            &["pandas", "dataframe", "питон", "python"],
-            &["pandas", "dataframe", "python", "groupby"],
+            &["pandas", "dataframe", "питон", "python", "groupby", "merge"],
+            &["pandas", "dataframe", "python", "groupby", "merge", "read_csv"],
         ),
         (
-            &["график", "визуализ", "chart", "dashboard"],
-            &["chart", "visualization", "bar", "scatter"],
+            &["график", "визуализ", "chart", "dashboard", "столбчат", "линейн"],
+            &["chart", "visualization", "bar", "scatter", "line", "histogram"],
         ),
         (
-            &["выручк", "метрик", "kpi", "бизнес", "рекоменд"],
-            &["revenue", "metric", "business", "recommendation"],
+            &["выручк", "метрик", "kpi", "бизнес", "рекоменд", "драйвер", "воронк", "когорт"],
+            &["revenue", "metric", "business", "recommendation", "funnel", "cohort", "decomposition"],
         ),
         (&["responsive", "адаптив", "медиа"], &["responsive", "media query"]),
     ];

@@ -27,6 +27,7 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
         "007_assessment_and_skills.sql",
         "008_missions_and_practice.sql",
         "009_projects_and_readiness.sql",
+        "010_data_analyst_knowledge.sql",
     ];
 
     for name in migrations {

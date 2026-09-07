@@ -347,7 +347,7 @@ export const api = {
       user_mission_id?: string;
     }
   ) =>
-    request<{ is_correct: boolean; feedback: string }>(
+    request<{ is_correct: boolean; feedback: string; result_rows?: unknown[] }>(
       `/api/users/${userId}/practice/${challengeId}/grade`,
       { method: 'POST', body: JSON.stringify(body) }
     ),

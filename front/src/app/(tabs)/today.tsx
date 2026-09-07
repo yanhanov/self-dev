@@ -84,70 +84,97 @@ export default function TodayScreen() {
             tintColor={Palette.brand}
           />
         }>
-        <Card>
-          <View style={styles.planHead}>
-            <Icon name="calendar" size={16} color={Palette.inkSoft} />
-            <ThemedText type="meta" themeColor="textSecondary">
-              Today's Mission
-            </ThemedText>
-          </View>
-          {adaptation ? (
-            <ThemedText type="small" style={styles.adapt}>
-              {adaptation}
-            </ThemedText>
+        <View style={styles.column}>
+          <Card>
+            <View style={styles.cardStack}>
+              <View style={styles.planHead}>
+                <Icon name="calendar" size={16} color={Palette.inkSoft} />
+                <ThemedText type="meta" themeColor="textSecondary">
+                  Today's Mission
+                </ThemedText>
+              </View>
+              {adaptation ? (
+                <ThemedText type="small" style={styles.adapt}>
+                  {adaptation}
+                </ThemedText>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Одна миссия на сегодня — ~30 минут, один конкретный навык.
+                </ThemedText>
+              )}
+            </View>
+          </Card>
+
+          {error ? (
+            <Card>
+              <View style={styles.cardStack}>
+                <ThemedText type="small" style={styles.error}>
+                  {error}
+                </ThemedText>
+                <Button label="Повторить" onPress={load} />
+              </View>
+            </Card>
           ) : null}
-        </Card>
 
-        {error ? (
+          {mission && mission.status !== 'completed' ? (
+            <MissionPlayer mission={mission} onUpdated={setMission} />
+          ) : null}
+
+          {mission?.status === 'completed' ? (
+            <Card>
+              <View style={styles.cardStack}>
+                <ThemedText type="subtitle">Миссия выполнена</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Навык обновлён. Завтра будет следующая миссия — или откройте проект / прогресс.
+                </ThemedText>
+                <View style={styles.row}>
+                  <Button label="Прогресс" onPress={() => router.push('/progress' as Href)} />
+                  <Button
+                    label="Проект"
+                    variant="secondary"
+                    onPress={() => router.push('/project' as Href)}
+                  />
+                </View>
+              </View>
+            </Card>
+          ) : null}
+
+          {!mission && !error ? (
+            <Card>
+              <View style={styles.cardStack}>
+                <ThemedText type="subtitle">{message || 'Миссий пока нет'}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Если вы Data Analyst — сначала пройдите assessment. Иначе откройте курс.
+                </ThemedText>
+                <View style={styles.row}>
+                  <Button label="Курс" onPress={() => router.push('/course')} />
+                  <Button
+                    label="Проект"
+                    variant="secondary"
+                    onPress={() => router.push('/project' as Href)}
+                  />
+                </View>
+              </View>
+            </Card>
+          ) : null}
+
           <Card>
-            <ThemedText type="small" style={styles.error}>
-              {error}
-            </ThemedText>
-            <Button label="Повторить" onPress={load} />
-          </Card>
-        ) : null}
-
-        {mission && mission.status !== 'completed' ? (
-          <MissionPlayer mission={mission} onUpdated={setMission} />
-        ) : null}
-
-        {mission?.status === 'completed' ? (
-          <Card>
-            <ThemedText type="subtitle">Миссия выполнена</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Навык обновлён. Завтра будет следующая миссия — или откройте проект / прогресс.
-            </ThemedText>
-            <View style={styles.row}>
-              <Button label="Прогресс" onPress={() => router.push('/progress' as Href)} />
-              <Button label="Проект" variant="secondary" onPress={() => router.push('/project' as Href)} />
+            <View style={styles.cardStack}>
+              <ThemedText type="smallBold">AI Mentor</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Спросите про JOIN, метрики или ошибку в задаче — наставник знает ваш skill graph.
+              </ThemedText>
+              <Button
+                label="Спросить наставника"
+                variant="secondary"
+                icon="sparkle"
+                onPress={() => setTutorOpen(true)}
+              />
             </View>
           </Card>
-        ) : null}
+        </View>
 
-        {!mission && !error ? (
-          <Card>
-            <ThemedText type="subtitle">{message || 'Миссий пока нет'}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Если вы Data Analyst — сначала пройдите assessment. Иначе откройте курс.
-            </ThemedText>
-            <View style={styles.row}>
-              <Button label="Курс" onPress={() => router.push('/course')} />
-              <Button label="Проект" variant="secondary" onPress={() => router.push('/project' as Href)} />
-            </View>
-          </Card>
-        ) : null}
-
-        <Button
-          label="Спросить AI Mentor"
-          variant="tertiary"
-          icon="sparkle"
-          onPress={() => setTutorOpen(true)}
-        />
-        <TutorChat
-          lessonTitle={mission?.title}
-          open={tutorOpen}
-          onOpenChange={setTutorOpen}
-        />
+        <TutorChat lessonTitle={mission?.title} open={tutorOpen} onOpenChange={setTutorOpen} />
       </AppShell>
     </Atmosphere>
   );
@@ -160,12 +187,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.two,
   },
+  column: {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Spacing.three,
+  },
+  cardStack: {
+    width: '100%',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Spacing.three,
+  },
   planHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  adapt: { color: Palette.brandDeep, marginTop: Spacing.two },
+  adapt: { color: Palette.brandDeep },
   error: { color: Palette.danger },
-  row: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three, flexWrap: 'wrap' },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    alignItems: 'center',
+  },
 });

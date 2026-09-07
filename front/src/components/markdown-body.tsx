@@ -17,13 +17,18 @@ export function MarkdownBody({
   const body = content.trim() ? content : emptyText;
 
   return (
-    <View style={bare ? undefined : styles.wrap}>
+    <View style={[bare ? styles.bare : styles.wrap, styles.base]}>
       <Markdown style={markdownStyles}>{body}</Markdown>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  base: {
+    width: '100%',
+    flexDirection: 'column',
+  },
+  bare: {},
   wrap: {
     padding: Spacing.four,
     borderRadius: Radius.sm,
