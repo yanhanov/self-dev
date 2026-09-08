@@ -9,7 +9,8 @@ import { api } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
 /**
- * Entry redirect. Finished course → today; otherwise course / assessment / onboarding.
+ * Entry redirect.
+ * Data Analyst: assessment → today (missions). Others: course / today when ready.
  */
 export default function HomeScreen() {
   useEffect(() => {
@@ -20,27 +21,24 @@ export default function HomeScreen() {
         return;
       }
       try {
-        const skills = await api.getSkills(userId).catch(() => null);
-        if (skills && skills.skills.every((s) => s.score === 0) && skills.skills.length > 0) {
-          // Likely DA without assessment scores — check course
-        }
         const course = await api.getCourse(userId);
+        const isDa = course.profession_slug === 'data_analyst';
+
+        if (isDa && !course.assessment_completed) {
+          router.replace('/assessment' as Href);
+          return;
+        }
+
+        if (isDa) {
+          router.replace('/today');
+          return;
+        }
+
         if (course.generation_status === 'ready') {
           router.replace('/today');
           return;
         }
-        // If DA profile exists but no course yet → assessment
-        if (!course.id || course.generation_status === 'pending') {
-          try {
-            await api.getAssessment('data_analyst');
-            if (course.profession_slug === 'data_analyst' && !course.id) {
-              router.replace('/assessment' as Href);
-              return;
-            }
-          } catch {
-            // no assessment for this profession
-          }
-        }
+
         router.replace('/course');
       } catch {
         router.replace('/onboarding');

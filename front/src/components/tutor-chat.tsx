@@ -32,6 +32,7 @@ type Message = {
 type Props = {
   lessonId?: string;
   lessonTitle?: string;
+  skillSlug?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -40,8 +41,26 @@ const NATIVE_DRIVER = Platform.OS !== 'web';
 const INPUT_MIN = 36;
 const INPUT_MAX = 240;
 
-function suggestionsForLesson(title?: string): string[] {
-  const t = (title || '').toLowerCase();
+function suggestionsForLesson(title?: string, skillSlug?: string): string[] {
+  const t = `${title || ''} ${skillSlug || ''}`.toLowerCase();
+  if (/sql|join|select|group|cte|where|агрегац/.test(t)) {
+    return ['Чем INNER JOIN отличается от LEFT?', 'Когда нужен GROUP BY?', 'Что такое CTE?'];
+  }
+  if (/excel|pivot|xlookup|vlookup|сводн/.test(t)) {
+    return ['Зачем Excel Table?', 'Pivot vs формулы?', 'Когда XLOOKUP лучше VLOOKUP?'];
+  }
+  if (/stat|median|корреляц|средн|выброс|распредел/.test(t)) {
+    return ['Mean vs median?', 'Почему correlation ≠ causation?', 'Как объяснять % change?'];
+  }
+  if (/pandas|python|dataframe|groupby/.test(t)) {
+    return ['Как фильтровать DataFrame?', 'groupby vs SQL?', 'Как мержить таблицы?'];
+  }
+  if (/chart|visual|график|dashboard|plotly/.test(t)) {
+    return ['Какой chart для сравнения?', 'Почему не pie chart?', 'Что писать в title?'];
+  }
+  if (/business|metric|воронк|kpi|reasoning/.test(t)) {
+    return ['Как разложить падение KPI?', 'Что спросить у стейкхолдера?', 'Как выбрать метрику?'];
+  }
   if (/flex|grid|css|стил|layout|верст/.test(t)) {
     return ['Чем flexbox отличается от grid?', 'Что такое box model?', 'Как сделать адаптив?'];
   }
@@ -67,7 +86,7 @@ function suggestionsForLesson(title?: string): string[] {
  * Panel only — the trigger lives in the lesson action bar, next to «Далее».
  * On a wide screen it docks over the reading column; on a phone it is a sheet.
  */
-export function TutorChat({ lessonId, lessonTitle, open, onOpenChange }: Props) {
+export function TutorChat({ lessonId, lessonTitle, skillSlug, open, onOpenChange }: Props) {
   const { isCompact } = useBreakpoint();
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(INPUT_MIN);
@@ -85,7 +104,10 @@ export function TutorChat({ lessonId, lessonTitle, open, onOpenChange }: Props) 
   const [mounted, setMounted] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
 
-  const suggestions = useMemo(() => suggestionsForLesson(lessonTitle), [lessonTitle]);
+  const suggestions = useMemo(
+    () => suggestionsForLesson(lessonTitle, skillSlug),
+    [lessonTitle, skillSlug]
+  );
 
   useEffect(() => {
     let cancelled = false;

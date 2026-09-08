@@ -93,6 +93,7 @@ export type Course = {
   profession_title: string;
   level_slug: string;
   level_title: string;
+  assessment_completed?: boolean;
   lessons: LessonSummary[];
 };
 
@@ -318,6 +319,7 @@ export const api = {
       created?: boolean;
       adaptation?: { focus_skill: string; reason: string } | null;
       message?: string;
+      needs_assessment?: boolean;
     }>(`/api/users/${userId}/missions/today`),
 
   advanceMission: (

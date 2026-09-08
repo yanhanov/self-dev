@@ -240,24 +240,42 @@ pub async fn retrieve_for_lesson(
     lesson_title: &str,
     lesson_summary: &str,
     limit: i64,
+    skill_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
     let raw = format!("{lesson_title} {lesson_summary}");
-    let mut chunks = retrieve_for_query(pool, Some(profession_id), &raw, limit).await?;
+    let mut chunks =
+        retrieve_for_query(pool, Some(profession_id), &raw, limit, skill_ids).await?;
+
+    // Prefer skill-tagged chunks, but fill from profession-wide KB if too sparse.
+    if chunks.len() < MIN_LESSON_CHUNKS && skill_ids.map(|s| !s.is_empty()).unwrap_or(false) {
+        let wider =
+            retrieve_for_query(pool, Some(profession_id), &raw, limit, None).await?;
+        merge_chunks(&mut chunks, wider, limit as usize);
+    }
 
     if chunks.len() >= MIN_LESSON_CHUNKS {
         return Ok(chunks);
     }
 
-    let fallback = retrieve_fallback(pool, Some(profession_id), limit).await?;
-    for chunk in fallback {
-        if !chunks.iter().any(|c| c.id == chunk.id) {
-            chunks.push(chunk);
-        }
-        if chunks.len() >= limit as usize {
-            break;
-        }
+    let fallback = retrieve_fallback(pool, Some(profession_id), limit, skill_ids).await?;
+    merge_chunks(&mut chunks, fallback, limit as usize);
+
+    if chunks.len() < MIN_LESSON_CHUNKS && skill_ids.map(|s| !s.is_empty()).unwrap_or(false) {
+        let wider_fb = retrieve_fallback(pool, Some(profession_id), limit, None).await?;
+        merge_chunks(&mut chunks, wider_fb, limit as usize);
     }
     Ok(chunks)
+}
+
+fn merge_chunks(into: &mut Vec<KnowledgeChunk>, from: Vec<KnowledgeChunk>, limit: usize) {
+    for chunk in from {
+        if into.len() >= limit {
+            break;
+        }
+        if !into.iter().any(|c| c.id == chunk.id) {
+            into.push(chunk);
+        }
+    }
 }
 
 pub async fn retrieve_for_query(
@@ -265,15 +283,18 @@ pub async fn retrieve_for_query(
     profession_id: Option<Uuid>,
     query_text: &str,
     limit: i64,
+    skill_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
     let tokens = search_tokens(query_text);
     if tokens.is_empty() {
         return Ok(vec![]);
     }
 
+    let skills = skill_ids.unwrap_or(&[]);
+
     // 1) Prefer OR FTS over Latin/tech tokens (works for RU questions containing "flexbox")
     if let Some(tsq) = build_or_tsquery(&tokens) {
-        let chunks = fts_or(pool, profession_id, &tsq, limit).await?;
+        let chunks = fts_or(pool, profession_id, &tsq, limit, skills).await?;
         if !chunks.is_empty() {
             return Ok(chunks);
         }
@@ -287,14 +308,14 @@ pub async fn retrieve_for_query(
         .collect::<Vec<_>>()
         .join(" ");
     if !latin_only.is_empty() {
-        let chunks = fts_plain(pool, profession_id, &latin_only, limit).await?;
+        let chunks = fts_plain(pool, profession_id, &latin_only, limit, skills).await?;
         if !chunks.is_empty() {
             return Ok(chunks);
         }
     }
 
     // 3) Last resort: ILIKE against any token / synonym (handles pure Russian via expansions)
-    ilike_fallback(pool, profession_id, &tokens, limit).await
+    ilike_fallback(pool, profession_id, &tokens, limit, skills).await
 }
 
 async fn fts_or(
@@ -302,6 +323,7 @@ async fn fts_or(
     profession_id: Option<Uuid>,
     tsq: &str,
     limit: i64,
+    skill_ids: &[Uuid],
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
     if let Some(pid) = profession_id {
         Ok(sqlx::query_as::<_, KnowledgeChunk>(
@@ -320,6 +342,13 @@ async fn fts_or(
             WHERE d.status = 'published'
               AND (d.profession_id IS NULL OR d.profession_id = $2)
               AND c.search_vector @@ to_tsquery('english', $1)
+              AND (
+                cardinality($4::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($4::uuid[])
+                )
+              )
             ORDER BY rank DESC
             LIMIT $3
             "#,
@@ -327,6 +356,7 @@ async fn fts_or(
         .bind(tsq)
         .bind(pid)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     } else {
@@ -345,12 +375,20 @@ async fn fts_or(
             JOIN knowledge_sources s ON s.id = d.source_id
             WHERE d.status = 'published'
               AND c.search_vector @@ to_tsquery('english', $1)
+              AND (
+                cardinality($3::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($3::uuid[])
+                )
+              )
             ORDER BY rank DESC
             LIMIT $2
             "#,
         )
         .bind(tsq)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     }
@@ -361,6 +399,7 @@ async fn fts_plain(
     profession_id: Option<Uuid>,
     query: &str,
     limit: i64,
+    skill_ids: &[Uuid],
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
     if let Some(pid) = profession_id {
         Ok(sqlx::query_as::<_, KnowledgeChunk>(
@@ -379,6 +418,13 @@ async fn fts_plain(
             WHERE d.status = 'published'
               AND (d.profession_id IS NULL OR d.profession_id = $2)
               AND c.search_vector @@ plainto_tsquery('english', $1)
+              AND (
+                cardinality($4::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($4::uuid[])
+                )
+              )
             ORDER BY rank DESC
             LIMIT $3
             "#,
@@ -386,6 +432,7 @@ async fn fts_plain(
         .bind(query)
         .bind(pid)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     } else {
@@ -404,12 +451,20 @@ async fn fts_plain(
             JOIN knowledge_sources s ON s.id = d.source_id
             WHERE d.status = 'published'
               AND c.search_vector @@ plainto_tsquery('english', $1)
+              AND (
+                cardinality($3::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($3::uuid[])
+                )
+              )
             ORDER BY rank DESC
             LIMIT $2
             "#,
         )
         .bind(query)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     }
@@ -420,6 +475,7 @@ async fn ilike_fallback(
     profession_id: Option<Uuid>,
     tokens: &[String],
     limit: i64,
+    skill_ids: &[Uuid],
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
     // Use the first few distinctive tokens for ILIKE
     let patterns: Vec<String> = tokens
@@ -454,6 +510,13 @@ async fn ilike_fallback(
                 SELECT 1 FROM unnest($2::text[]) AS p(pat)
                 WHERE c.title ILIKE p.pat OR c.content_text ILIKE p.pat
               )
+              AND (
+                cardinality($4::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($4::uuid[])
+                )
+              )
             ORDER BY c.title
             LIMIT $3
             "#,
@@ -461,6 +524,7 @@ async fn ilike_fallback(
         .bind(pid)
         .bind(&patterns)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     } else {
@@ -482,12 +546,20 @@ async fn ilike_fallback(
                 SELECT 1 FROM unnest($1::text[]) AS p(pat)
                 WHERE c.title ILIKE p.pat OR c.content_text ILIKE p.pat
               )
+              AND (
+                cardinality($3::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($3::uuid[])
+                )
+              )
             ORDER BY c.title
             LIMIT $2
             "#,
         )
         .bind(&patterns)
         .bind(limit)
+        .bind(skill_ids)
         .fetch_all(pool)
         .await?)
     }
@@ -497,7 +569,9 @@ async fn retrieve_fallback(
     pool: &PgPool,
     profession_id: Option<Uuid>,
     limit: i64,
+    skill_ids: Option<&[Uuid]>,
 ) -> anyhow::Result<Vec<KnowledgeChunk>> {
+    let skills = skill_ids.unwrap_or(&[]);
     let chunks = if let Some(pid) = profession_id {
         sqlx::query_as::<_, KnowledgeChunk>(
             r#"
@@ -514,12 +588,20 @@ async fn retrieve_fallback(
             JOIN knowledge_sources s ON s.id = d.source_id
             WHERE d.status = 'published'
               AND (d.profession_id IS NULL OR d.profession_id = $1)
+              AND (
+                cardinality($3::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($3::uuid[])
+                )
+              )
             ORDER BY d.title, c.chunk_index
             LIMIT $2
             "#,
         )
         .bind(pid)
         .bind(limit)
+        .bind(skills)
         .fetch_all(pool)
         .await?
     } else {
@@ -537,11 +619,19 @@ async fn retrieve_fallback(
             JOIN knowledge_documents d ON d.id = c.document_id
             JOIN knowledge_sources s ON s.id = d.source_id
             WHERE d.status = 'published'
+              AND (
+                cardinality($2::uuid[]) = 0
+                OR EXISTS (
+                  SELECT 1 FROM knowledge_chunk_skills kcs
+                  WHERE kcs.chunk_id = c.id AND kcs.skill_id = ANY($2::uuid[])
+                )
+              )
             ORDER BY d.title, c.chunk_index
             LIMIT $1
             "#,
         )
         .bind(limit)
+        .bind(skills)
         .fetch_all(pool)
         .await?
     };

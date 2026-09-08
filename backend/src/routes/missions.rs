@@ -60,6 +60,27 @@ pub async fn today_mission(
 ) -> AppResult<Json<Value>> {
     let today = chrono::Utc::now().date_naive();
 
+    let profile = sqlx::query_as::<_, (String, bool)>(
+        r#"
+        SELECT COALESCE(p.slug, ''), COALESCE(up.assessment_completed, false)
+        FROM user_profiles up
+        LEFT JOIN professions p ON p.id = up.profession_id
+        WHERE up.user_id = $1
+        "#,
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    if profile.0 == "data_analyst" && !profile.1 {
+        return Ok(Json(json!({
+            "mission": null,
+            "needs_assessment": true,
+            "message": "Сначала пройдите assessment — миссии строятся по skill graph"
+        })));
+    }
+
     // Return existing mission for today if any
     if let Some(existing) = fetch_user_mission(&state.pool, user_id, today).await? {
         return Ok(Json(json!({ "mission": existing, "created": false })));

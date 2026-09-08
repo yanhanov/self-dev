@@ -287,6 +287,7 @@ pub async fn generate_lesson_content(
             l.id AS lesson_id,
             l.title AS lesson_title,
             l.summary AS lesson_summary,
+            l.skill_id,
             c.title AS course_title,
             c.profession_id,
             p.slug AS profession_slug,
@@ -307,12 +308,18 @@ pub async fn generate_lesson_content(
     .fetch_one(pool)
     .await?;
 
+    let skill_buf = row.skill_id.map(|id| vec![id]).unwrap_or_default();
     let chunks = knowledge::retrieve_for_lesson(
         pool,
         row.profession_id,
         &row.lesson_title,
         &row.lesson_summary,
         8,
+        if skill_buf.is_empty() {
+            None
+        } else {
+            Some(skill_buf.as_slice())
+        },
     )
     .await?;
 
@@ -492,6 +499,7 @@ struct LessonCtx {
     lesson_id: Uuid,
     lesson_title: String,
     lesson_summary: String,
+    skill_id: Option<Uuid>,
     course_title: String,
     profession_id: Uuid,
     profession_slug: String,
@@ -553,7 +561,7 @@ pub async fn ensure_daily_plan(
 
     let next_lesson_row = sqlx::query_as::<_, NextLessonRow>(
         r#"
-        SELECT l.id, l.title
+        SELECT l.id, l.title, l.skill_id
         FROM lessons l
         JOIN courses c ON c.id = l.course_id
         WHERE c.user_id = $1 AND l.status IN ('ready', 'generating', 'in_progress', 'locked')
@@ -567,6 +575,11 @@ pub async fn ensure_daily_plan(
 
     let next_lesson_title = next_lesson_row.as_ref().map(|r| r.title.clone());
     let next_lesson_id = next_lesson_row.as_ref().map(|r| r.id);
+    let plan_skill_buf = next_lesson_row
+        .as_ref()
+        .and_then(|r| r.skill_id)
+        .map(|id| vec![id])
+        .unwrap_or_default();
 
     let plan_chunks = knowledge::retrieve_for_lesson(
         pool,
@@ -574,6 +587,11 @@ pub async fn ensure_daily_plan(
         next_lesson_title.as_deref().unwrap_or("daily practice"),
         "",
         5,
+        if plan_skill_buf.is_empty() {
+            None
+        } else {
+            Some(plan_skill_buf.as_slice())
+        },
     )
     .await
     .unwrap_or_default();
@@ -660,4 +678,5 @@ struct DailyCtx {
 struct NextLessonRow {
     id: Uuid,
     title: String,
+    skill_id: Option<Uuid>,
 }

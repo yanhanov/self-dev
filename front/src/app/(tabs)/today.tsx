@@ -18,6 +18,7 @@ import { getStoredUserId } from '@/store/user';
 export default function TodayScreen() {
   const [mission, setMission] = useState<TodayMission | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [needsAssessment, setNeedsAssessment] = useState(false);
   const [adaptation, setAdaptation] = useState<string | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,7 @@ export default function TodayScreen() {
       if (missionRes.status === 'fulfilled') {
         setMission(missionRes.value.mission);
         setMessage(missionRes.value.message || null);
+        setNeedsAssessment(Boolean(missionRes.value.needs_assessment));
         setAdaptation(missionRes.value.adaptation?.reason || null);
         setError(null);
       } else {
@@ -144,10 +146,19 @@ export default function TodayScreen() {
               <View style={styles.cardStack}>
                 <ThemedText type="subtitle">{message || 'Миссий пока нет'}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Если вы Data Analyst — сначала пройдите assessment. Иначе откройте курс.
+                  {needsAssessment
+                    ? 'Assessment занимает ~10 минут и открывает персональные миссии.'
+                    : 'Откройте курс или portfolio project, если миссии уже пройдены.'}
                 </ThemedText>
                 <View style={styles.row}>
-                  <Button label="Курс" onPress={() => router.push('/course')} />
+                  {needsAssessment ? (
+                    <Button
+                      label="Пройти assessment"
+                      onPress={() => router.push('/assessment' as Href)}
+                    />
+                  ) : (
+                    <Button label="Курс" onPress={() => router.push('/course')} />
+                  )}
                   <Button
                     label="Проект"
                     variant="secondary"
@@ -174,7 +185,12 @@ export default function TodayScreen() {
           </Card>
         </View>
 
-        <TutorChat lessonTitle={mission?.title} open={tutorOpen} onOpenChange={setTutorOpen} />
+        <TutorChat
+          lessonTitle={mission?.title}
+          skillSlug={mission?.skill_slug}
+          open={tutorOpen}
+          onOpenChange={setTutorOpen}
+        />
       </AppShell>
     </Atmosphere>
   );

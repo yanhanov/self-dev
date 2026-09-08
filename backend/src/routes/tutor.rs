@@ -74,10 +74,10 @@ pub async fn chat(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    let lesson_title: String = if let Some(lesson_id) = body.lesson_id {
-        sqlx::query_scalar(
+    let lesson_meta: Option<(String, Option<Uuid>)> = if let Some(lesson_id) = body.lesson_id {
+        sqlx::query_as(
             r#"
-            SELECT l.title
+            SELECT l.title, l.skill_id
             FROM lessons l
             JOIN courses c ON c.id = l.course_id
             WHERE l.id = $1 AND c.user_id = $2
@@ -87,15 +87,22 @@ pub async fn chat(
         .bind(user_id)
         .fetch_optional(&state.pool)
         .await?
-        .unwrap_or_default()
     } else {
-        String::new()
+        None
     };
+    let lesson_title = lesson_meta
+        .as_ref()
+        .map(|(t, _)| t.clone())
+        .unwrap_or_default();
+    let mut focus_skill_ids: Vec<Uuid> = lesson_meta
+        .and_then(|(_, sid)| sid)
+        .into_iter()
+        .collect();
 
     // Learner model summary for mentor
-    let skills: Vec<(String, f64)> = sqlx::query_as(
+    let skills: Vec<(Uuid, String, f64)> = sqlx::query_as(
         r#"
-        SELECT s.title, COALESCE(us.score, 0)::float8
+        SELECT s.id, s.title, COALESCE(us.score, 0)::float8
         FROM profession_skills ps
         JOIN user_profiles up ON up.profession_id = ps.profession_id
         JOIN skills s ON s.id = ps.skill_id
@@ -107,6 +114,15 @@ pub async fn chat(
     .bind(user_id)
     .fetch_all(&state.pool)
     .await?;
+
+    if focus_skill_ids.is_empty() {
+        if let Some((sid, _, _)) = skills
+            .iter()
+            .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
+        {
+            focus_skill_ids.push(*sid);
+        }
+    }
 
     let mistakes: Vec<(String, String)> = sqlx::query_as(
         r#"
@@ -137,7 +153,7 @@ pub async fn chat(
 
     let skill_line = skills
         .iter()
-        .map(|(t, s)| format!("{t}:{s:.0}%"))
+        .map(|(_, t, s)| format!("{t}:{s:.0}%"))
         .collect::<Vec<_>>()
         .join(", ");
     let mistake_line = if mistakes.is_empty() {
@@ -158,12 +174,19 @@ pub async fn chat(
         recent_missions.join("; ")
     );
 
+    let skill_slice = if focus_skill_ids.is_empty() {
+        None
+    } else {
+        Some(focus_skill_ids.as_slice())
+    };
+
     // Search the user message first. Russian lesson titles pollute english FTS.
     let mut chunks = knowledge::retrieve_for_query(
         &state.pool,
         profile.profession_id,
         &message,
         5,
+        skill_slice,
     )
     .await?;
 
@@ -173,6 +196,18 @@ pub async fn chat(
             profile.profession_id,
             &format!("{message} {lesson_title}"),
             5,
+            skill_slice,
+        )
+        .await?;
+    }
+
+    if chunks.is_empty() && skill_slice.is_some() {
+        chunks = knowledge::retrieve_for_query(
+            &state.pool,
+            profile.profession_id,
+            &message,
+            5,
+            None,
         )
         .await?;
     }

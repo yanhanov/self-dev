@@ -106,8 +106,8 @@ export default function AssessmentScreen() {
           <ScrollView contentContainerStyle={styles.scroll}>
             <ThemedText type="title">Ваш skill graph</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Общий результат: {Math.round(result.overall_score)}%. Дальше — персональный roadmap по
-              пробелам.
+              Общий результат: {Math.round(result.overall_score)}%. Дальше — ежедневные миссии по
+              пробелам и персональный roadmap.
             </ThemedText>
             <Card>
               <View style={styles.stack}>
@@ -138,9 +138,9 @@ export default function AssessmentScreen() {
               </ThemedText>
             ) : null}
             <Button
-              label="Собрать мой курс"
+              label="К первой миссии"
               size="lg"
-              onPress={() => router.replace('/course')}
+              onPress={() => router.replace('/today')}
             />
           </ScrollView>
         </SafeAreaView>

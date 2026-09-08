@@ -22,6 +22,7 @@ pub struct CourseResponse {
     pub profession_title: String,
     pub level_slug: String,
     pub level_title: String,
+    pub assessment_completed: bool,
     pub lessons: Vec<LessonSummary>,
 }
 
@@ -34,6 +35,7 @@ pub async fn get_course(
         SELECT
             up.user_id,
             COALESCE(up.generation_status::text, 'pending') AS generation_status,
+            COALESCE(up.assessment_completed, false) AS assessment_completed,
             COALESCE(p.slug, '') AS profession_slug,
             COALESCE(p.title, '') AS profession_title,
             sl.slug AS level_slug,
@@ -77,6 +79,7 @@ pub async fn get_course(
             profession_title: profile.profession_title,
             level_slug: profile.level_slug,
             level_title: profile.level_title,
+            assessment_completed: profile.assessment_completed,
             lessons: vec![],
         }));
     };
@@ -122,6 +125,7 @@ pub async fn get_course(
         profession_title: course.profession_title,
         level_slug: course.level_slug,
         level_title: course.level_title,
+        assessment_completed: profile.assessment_completed,
         lessons,
     }))
 }
@@ -131,6 +135,7 @@ struct ProfileRow {
     #[allow(dead_code)]
     user_id: Uuid,
     generation_status: String,
+    assessment_completed: bool,
     profession_slug: String,
     profession_title: String,
     level_slug: String,
