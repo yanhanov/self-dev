@@ -81,9 +81,31 @@ pub async fn today_mission(
         })));
     }
 
-    // Return existing mission for today if any
+    // Return today's mission if any (including completed — one mission per day)
     if let Some(existing) = fetch_user_mission(&state.pool, user_id, today).await? {
         return Ok(Json(json!({ "mission": existing, "created": false })));
+    }
+
+    // Already finished today's slot — do not assign another until tomorrow
+    let completed_today: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM user_missions
+            WHERE user_id = $1 AND plan_date = $2 AND status = 'completed'
+        )
+        "#,
+    )
+    .bind(user_id)
+    .bind(today)
+    .fetch_one(&state.pool)
+    .await?;
+
+    if completed_today {
+        // Should be covered by fetch above; keep as safety net
+        return Ok(Json(json!({
+            "mission": null,
+            "message": "Миссия на сегодня выполнена — завтра будет следующая"
+        })));
     }
 
     // Pick next incomplete authored mission by skill gaps / order
@@ -280,8 +302,9 @@ async fn fetch_user_mission(
         JOIN skills s ON s.id = m.skill_id
         LEFT JOIN practice_challenges pc ON pc.id = m.challenge_id
         WHERE um.user_id = $1 AND um.plan_date = $2
-          AND um.status != 'completed'
-        ORDER BY um.started_at DESC NULLS LAST
+        ORDER BY
+          CASE WHEN um.status = 'completed' THEN 1 ELSE 0 END,
+          um.started_at DESC NULLS LAST
         LIMIT 1
         "#,
     )

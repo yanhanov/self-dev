@@ -124,8 +124,10 @@ export default function OnboardingScreen() {
         weekly_hours: weeklyHours,
         preferred_language: 'ru',
       });
-      if (onboard.next === 'assessment' || professionSlug === 'data_analyst') {
+      if (onboard.next === 'assessment') {
         router.replace('/assessment' as Href);
+      } else if (onboard.next === 'today') {
+        router.replace('/today');
       } else {
         router.replace('/course');
       }

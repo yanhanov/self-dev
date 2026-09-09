@@ -84,6 +84,14 @@ pub async fn onboard(
     let level_id =
         level_id.ok_or_else(|| AppError::BadRequest(format!("unknown level: {level_slug}")))?;
 
+    let previous_profession_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT profession_id FROM user_profiles WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .flatten();
+    let profession_changed = previous_profession_id != Some(profession_id);
+
     sqlx::query(
         r#"
         INSERT INTO user_profiles (
@@ -99,8 +107,16 @@ pub async fn onboard(
             skill_level_id = EXCLUDED.skill_level_id,
             weekly_hours = EXCLUDED.weekly_hours,
             preferred_language = EXCLUDED.preferred_language,
-            generation_status = 'pending'::generation_status,
-            assessment_completed = false,
+            generation_status = CASE
+                WHEN user_profiles.profession_id IS NOT DISTINCT FROM EXCLUDED.profession_id
+                THEN user_profiles.generation_status
+                ELSE 'pending'::generation_status
+            END,
+            assessment_completed = CASE
+                WHEN user_profiles.profession_id IS NOT DISTINCT FROM EXCLUDED.profession_id
+                THEN user_profiles.assessment_completed
+                ELSE false
+            END,
             updated_at = now()
         "#,
     )
@@ -114,6 +130,24 @@ pub async fn onboard(
 
     // Data Analyst MVP loop: assessment → skill graph → roadmap (no self-level).
     if body.profession_slug == "data_analyst" {
+        let assessment_done: bool = sqlx::query_scalar(
+            "SELECT COALESCE(assessment_completed, false) FROM user_profiles WHERE user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_one(&state.pool)
+        .await?;
+
+        if assessment_done {
+            return Ok((
+                StatusCode::ACCEPTED,
+                Json(json!({
+                    "status": "accepted",
+                    "next": "today",
+                    "generation_status": "ready"
+                })),
+            ));
+        }
+
         return Ok((
             StatusCode::ACCEPTED,
             Json(json!({
@@ -140,11 +174,31 @@ pub async fn onboard(
     .fetch_one(&state.pool)
     .await?;
 
-    let pool = state.pool.clone();
-    let ai = state.ai.clone();
-    tokio::spawn(async move {
-        run_course_outline_job(pool, ai, user_id, job_id).await;
-    });
+    let has_course: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM courses WHERE user_id = $1)")
+            .bind(user_id)
+            .fetch_one(&state.pool)
+            .await?;
+
+    // Regenerate when first onboard, profession changed, or course missing
+    if profession_changed || !has_course {
+        sqlx::query(
+            r#"
+            UPDATE user_profiles
+            SET generation_status = 'pending', updated_at = now()
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(&state.pool)
+        .await?;
+
+        let pool = state.pool.clone();
+        let ai = state.ai.clone();
+        tokio::spawn(async move {
+            run_course_outline_job(pool, ai, user_id, job_id).await;
+        });
+    }
 
     Ok((
         StatusCode::ACCEPTED,
@@ -152,7 +206,11 @@ pub async fn onboard(
             "status": "accepted",
             "job_id": job_id,
             "next": "course",
-            "generation_status": "pending"
+            "generation_status": if profession_changed || !has_course {
+                "pending"
+            } else {
+                "ready"
+            }
         })),
     ))
 }

@@ -273,7 +273,7 @@ export const api = {
         intensity: string;
         score: number | null;
       }[];
-      job_id: string;
+      job_id?: string | null;
     }>(`/api/users/${userId}/assessment/${attemptId}/submit`, {
       method: 'POST',
       body: JSON.stringify({ answers }),

@@ -100,6 +100,20 @@ pub async fn start(
     Path(user_id): Path<Uuid>,
     Json(body): Json<StartAssessmentRequest>,
 ) -> AppResult<(StatusCode, Json<Value>)> {
+    let already_done: bool = sqlx::query_scalar(
+        "SELECT COALESCE(assessment_completed, false) FROM user_profiles WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .unwrap_or(false);
+
+    if already_done {
+        return Err(AppError::BadRequest(
+            "assessment already completed — open today missions instead".into(),
+        ));
+    }
+
     let slug = body
         .assessment_slug
         .unwrap_or_else(|| "da_baseline".to_string());
@@ -281,34 +295,46 @@ pub async fn submit(
     .execute(&state.pool)
     .await?;
 
-    // Kick off personalized course after assessment
-    let job_id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO generation_jobs (user_id, job_type, status, payload)
-        VALUES ($1, 'course_outline', 'queued', '{"source":"assessment"}'::jsonb)
-        RETURNING id
-        "#,
+    // Kick off personalized course only once — never wipe an existing course on re-submit
+    let has_course: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM courses WHERE user_id = $1)",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
     .await?;
 
-    sqlx::query(
-        r#"
-        UPDATE user_profiles
-        SET generation_status = 'pending', updated_at = now()
-        WHERE user_id = $1
-        "#,
-    )
-    .bind(user_id)
-    .execute(&state.pool)
-    .await?;
+    let job_id = if has_course {
+        None
+    } else {
+        let id: Uuid = sqlx::query_scalar(
+            r#"
+            INSERT INTO generation_jobs (user_id, job_type, status, payload)
+            VALUES ($1, 'course_outline', 'queued', '{"source":"assessment"}'::jsonb)
+            RETURNING id
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&state.pool)
+        .await?;
 
-    let pool = state.pool.clone();
-    let ai = state.ai.clone();
-    tokio::spawn(async move {
-        run_course_outline_job(pool, ai, user_id, job_id).await;
-    });
+        sqlx::query(
+            r#"
+            UPDATE user_profiles
+            SET generation_status = 'pending', updated_at = now()
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(&state.pool)
+        .await?;
+
+        let pool = state.pool.clone();
+        let ai = state.ai.clone();
+        tokio::spawn(async move {
+            run_course_outline_job(pool, ai, user_id, id).await;
+        });
+        Some(id)
+    };
 
     let profession_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT profession_id FROM user_profiles WHERE user_id = $1",

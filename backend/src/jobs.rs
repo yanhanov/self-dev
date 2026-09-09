@@ -210,7 +210,7 @@ async fn generate_course_outline_inner(
     sqlx::query(
         r#"
         UPDATE user_profiles
-        SET generation_status = 'ready', updated_at = now()
+        SET generation_status = 'generating', updated_at = now()
         WHERE user_id = $1
         "#,
     )
@@ -226,8 +226,30 @@ async fn generate_course_outline_inner(
         tokio::spawn(async move {
             if let Err(err) = generate_lesson_content(&pool2, &ai2, user_id, lesson_id).await {
                 tracing::error!("first lesson generation failed: {err:#}");
+                let _ = sqlx::query(
+                    r#"
+                    UPDATE user_profiles
+                    SET generation_status = 'failed', updated_at = now()
+                    WHERE user_id = $1 AND generation_status = 'generating'
+                    "#,
+                )
+                .bind(user_id)
+                .execute(&pool2)
+                .await;
             }
         });
+    } else {
+        // Outline with no lessons — mark ready so UI does not spin forever
+        sqlx::query(
+            r#"
+            UPDATE user_profiles
+            SET generation_status = 'ready', updated_at = now()
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     }
 
     Ok(())
@@ -488,6 +510,24 @@ pub async fn generate_lesson_content(
     .bind(job_id)
     .execute(&mut *tx)
     .await?;
+
+    // Mark profile ready once the first lesson content exists
+    let order_index: i32 = sqlx::query_scalar("SELECT order_index FROM lessons WHERE id = $1")
+        .bind(lesson_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    if order_index == 1 {
+        sqlx::query(
+            r#"
+            UPDATE user_profiles
+            SET generation_status = 'ready', updated_at = now()
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+    }
 
     tx.commit().await?;
     Ok(())

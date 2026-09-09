@@ -45,6 +45,11 @@ export default function AssessmentScreen() {
           router.replace('/onboarding');
           return;
         }
+        const course = await api.getCourse(userId).catch(() => null);
+        if (course?.assessment_completed) {
+          router.replace('/today');
+          return;
+        }
         const data = await api.getAssessment('data_analyst');
         setTitle(data.assessment.title);
         setItems(

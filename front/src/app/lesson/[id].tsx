@@ -246,7 +246,11 @@ export default function LessonScreen() {
         disabled: submitting || !allAnswered,
       };
     }
-    return { label: 'К программе', onPress: () => router.replace('/course'), disabled: false };
+    return {
+      label: submitting ? 'Сохраняем…' : 'Завершить урок',
+      onPress: submitQuiz,
+      disabled: submitting,
+    };
   })();
 
   return (

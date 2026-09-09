@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { Palette, Spacing } from '@/constants/theme';
-import { api, Course, friendlyError, TodayMission } from '@/lib/api';
+import { api, Course, friendlyError, TodayMission, TodayResponse } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
 
 export default function TodayScreen() {
@@ -20,11 +20,15 @@ export default function TodayScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [needsAssessment, setNeedsAssessment] = useState(false);
   const [adaptation, setAdaptation] = useState<string | null>(null);
+  const [daily, setDaily] = useState<TodayResponse | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tutorOpen, setTutorOpen] = useState(false);
+  const [completingTask, setCompletingTask] = useState<string | null>(null);
+
+  const isDa = course?.profession_slug === 'data_analyst';
 
   const load = useCallback(async () => {
     const uid = await getStoredUserId();
@@ -34,21 +38,35 @@ export default function TodayScreen() {
     }
 
     try {
-      const [missionRes, courseRes] = await Promise.allSettled([
-        api.getTodayMission(uid),
-        api.getCourse(uid),
-      ]);
+      const courseRes = await api.getCourse(uid).catch(() => null);
+      setCourse(courseRes);
 
-      if (missionRes.status === 'fulfilled') {
-        setMission(missionRes.value.mission);
-        setMessage(missionRes.value.message || null);
-        setNeedsAssessment(Boolean(missionRes.value.needs_assessment));
-        setAdaptation(missionRes.value.adaptation?.reason || null);
-        setError(null);
+      const da = courseRes?.profession_slug === 'data_analyst';
+      if (da) {
+        setDaily(null);
+        try {
+          const missionRes = await api.getTodayMission(uid);
+          setMission(missionRes.mission);
+          setMessage(missionRes.message || null);
+          setNeedsAssessment(Boolean(missionRes.needs_assessment));
+          setAdaptation(missionRes.adaptation?.reason || null);
+          setError(null);
+        } catch (e) {
+          setError(friendlyError(e));
+        }
       } else {
-        setError(friendlyError(missionRes.reason));
+        setMission(null);
+        setNeedsAssessment(false);
+        setAdaptation(null);
+        try {
+          const plan = await api.getToday(uid);
+          setDaily(plan);
+          setMessage(null);
+          setError(null);
+        } catch (e) {
+          setError(friendlyError(e));
+        }
       }
-      setCourse(courseRes.status === 'fulfilled' ? courseRes.value : null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -59,13 +77,27 @@ export default function TodayScreen() {
     load();
   }, [load]);
 
+  async function markTaskDone(taskId: string) {
+    const uid = await getStoredUserId();
+    if (!uid) return;
+    setCompletingTask(taskId);
+    try {
+      await api.completeTask(uid, taskId);
+      await load();
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setCompletingTask(null);
+    }
+  }
+
   if (loading) {
     return (
       <Atmosphere>
         <View style={styles.center}>
           <ActivityIndicator color={Palette.brand} />
           <ThemedText type="small" themeColor="textSecondary">
-            Подбираем сегодняшнюю миссию…
+            Подбираем план на сегодня…
           </ThemedText>
         </View>
       </Atmosphere>
@@ -92,7 +124,7 @@ export default function TodayScreen() {
               <View style={styles.planHead}>
                 <Icon name="calendar" size={16} color={Palette.inkSoft} />
                 <ThemedText type="meta" themeColor="textSecondary">
-                  Today's Mission
+                  {isDa ? "Today's Mission" : 'План на сегодня'}
                 </ThemedText>
               </View>
               {adaptation ? (
@@ -101,7 +133,9 @@ export default function TodayScreen() {
                 </ThemedText>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary">
-                  Одна миссия на сегодня — ~30 минут, один конкретный навык.
+                  {isDa
+                    ? 'Одна миссия на сегодня — ~30 минут, один конкретный навык.'
+                    : daily?.plan.summary || 'Короткий план на сегодня по вашему курсу.'}
                 </ThemedText>
               )}
             </View>
@@ -118,62 +152,112 @@ export default function TodayScreen() {
             </Card>
           ) : null}
 
-          {mission && mission.status !== 'completed' ? (
-            <MissionPlayer mission={mission} onUpdated={setMission} />
-          ) : null}
+          {isDa ? (
+            <>
+              {mission && mission.status !== 'completed' ? (
+                <MissionPlayer mission={mission} onUpdated={setMission} />
+              ) : null}
 
-          {mission?.status === 'completed' ? (
-            <Card>
-              <View style={styles.cardStack}>
-                <ThemedText type="subtitle">Миссия выполнена</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Навык обновлён. Завтра будет следующая миссия — или откройте проект / прогресс.
-                </ThemedText>
-                <View style={styles.row}>
-                  <Button label="Прогресс" onPress={() => router.push('/progress' as Href)} />
-                  <Button
-                    label="Проект"
-                    variant="secondary"
-                    onPress={() => router.push('/project' as Href)}
-                  />
-                </View>
-              </View>
-            </Card>
-          ) : null}
+              {mission?.status === 'completed' ? (
+                <Card>
+                  <View style={styles.cardStack}>
+                    <ThemedText type="subtitle">Миссия выполнена</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Навык обновлён. Завтра будет следующая миссия — или откройте проект / прогресс.
+                    </ThemedText>
+                    <View style={styles.row}>
+                      <Button label="Прогресс" onPress={() => router.push('/progress' as Href)} />
+                      <Button
+                        label="Проект"
+                        variant="secondary"
+                        onPress={() => router.push('/project' as Href)}
+                      />
+                    </View>
+                  </View>
+                </Card>
+              ) : null}
 
-          {!mission && !error ? (
-            <Card>
-              <View style={styles.cardStack}>
-                <ThemedText type="subtitle">{message || 'Миссий пока нет'}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {needsAssessment
-                    ? 'Assessment занимает ~10 минут и открывает персональные миссии.'
-                    : 'Откройте курс или portfolio project, если миссии уже пройдены.'}
-                </ThemedText>
-                <View style={styles.row}>
-                  {needsAssessment ? (
-                    <Button
-                      label="Пройти assessment"
-                      onPress={() => router.push('/assessment' as Href)}
-                    />
-                  ) : (
-                    <Button label="Курс" onPress={() => router.push('/course')} />
-                  )}
-                  <Button
-                    label="Проект"
-                    variant="secondary"
-                    onPress={() => router.push('/project' as Href)}
-                  />
-                </View>
-              </View>
-            </Card>
-          ) : null}
+              {!mission && !error ? (
+                <Card>
+                  <View style={styles.cardStack}>
+                    <ThemedText type="subtitle">{message || 'Миссий пока нет'}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {needsAssessment
+                        ? 'Assessment занимает ~10 минут и открывает персональные миссии.'
+                        : 'Откройте курс или portfolio project, если миссии уже пройдены.'}
+                    </ThemedText>
+                    <View style={styles.row}>
+                      {needsAssessment ? (
+                        <Button
+                          label="Пройти assessment"
+                          onPress={() => router.push('/assessment' as Href)}
+                        />
+                      ) : (
+                        <Button label="Курс" onPress={() => router.push('/course')} />
+                      )}
+                      <Button
+                        label="Проект"
+                        variant="secondary"
+                        onPress={() => router.push('/project' as Href)}
+                      />
+                    </View>
+                  </View>
+                </Card>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {daily?.tasks.map((task) => (
+                <Card key={task.id}>
+                  <View style={styles.cardStack}>
+                    <ThemedText type="smallBold">{task.title}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {task.description}
+                      {task.estimated_minutes != null
+                        ? ` · ~${task.estimated_minutes} мин`
+                        : ''}
+                    </ThemedText>
+                    <View style={styles.row}>
+                      {task.lesson_id ? (
+                        <Button
+                          label="Открыть урок"
+                          onPress={() => router.push(`/lesson/${task.lesson_id}`)}
+                        />
+                      ) : null}
+                      {task.status !== 'done' ? (
+                        <Button
+                          label={completingTask === task.id ? '…' : 'Готово'}
+                          variant="secondary"
+                          disabled={completingTask === task.id}
+                          onPress={() => markTaskDone(task.id)}
+                        />
+                      ) : (
+                        <ThemedText type="meta" themeColor="textSecondary">
+                          Сделано
+                        </ThemedText>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+              ))}
+              {!daily?.tasks.length && !error ? (
+                <Card>
+                  <View style={styles.cardStack}>
+                    <ThemedText type="subtitle">План ещё собирается</ThemedText>
+                    <Button label="К курсу" onPress={() => router.push('/course')} />
+                  </View>
+                </Card>
+              ) : null}
+            </>
+          )}
 
           <Card>
             <View style={styles.cardStack}>
               <ThemedText type="smallBold">AI Mentor</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Спросите про JOIN, метрики или ошибку в задаче — наставник знает ваш skill graph.
+                {isDa
+                  ? 'Спросите про JOIN, метрики или ошибку в задаче — наставник знает ваш skill graph.'
+                  : 'Спросите про урок или задачу — наставник опирается на базу знаний курса.'}
               </ThemedText>
               <Button
                 label="Спросить наставника"
@@ -186,7 +270,7 @@ export default function TodayScreen() {
         </View>
 
         <TutorChat
-          lessonTitle={mission?.title}
+          lessonTitle={mission?.title || daily?.tasks[0]?.title}
           skillSlug={mission?.skill_slug}
           open={tutorOpen}
           onOpenChange={setTutorOpen}
