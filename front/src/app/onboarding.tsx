@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { Atmosphere } from '@/components/ui/atmosphere';
 import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Choice } from '@/components/ui/choice';
@@ -231,11 +232,7 @@ export default function OnboardingScreen() {
                       <View style={styles.optionCopy}>
                         <View style={styles.titleRow}>
                           <ThemedText type="subtitle">{p.title}</ThemedText>
-                          {isPrimary ? (
-                            <ThemedText type="meta" style={styles.badge}>
-                              MVP
-                            </ThemedText>
-                          ) : null}
+                          {isPrimary ? <Badge label="MVP" tone="brand" /> : null}
                         </View>
                         <ThemedText type="small" themeColor="textSecondary">
                           {p.description}
@@ -434,14 +431,6 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.one,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
-  badge: {
-    color: Palette.brandDeep,
-    backgroundColor: Palette.brandSoft,
-    overflow: 'hidden',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.xs,
-  },
   pressed: { backgroundColor: Palette.surfaceAlt },
   option: {
     flexDirection: 'row',

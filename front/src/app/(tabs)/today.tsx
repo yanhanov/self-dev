@@ -2,15 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import { type Href, router } from 'expo-router';
 
-import { CourseRail } from '@/components/course-rail';
+import { CourseRail, nextOpenLesson } from '@/components/course-rail';
 import { AppShell } from '@/components/layout/app-shell';
 import { MissionPlayer } from '@/components/mission-player';
 import { ThemedText } from '@/components/themed-text';
 import { TutorChat } from '@/components/tutor-chat';
 import { Atmosphere } from '@/components/ui/atmosphere';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { Palette, Spacing } from '@/constants/theme';
 import { api, Course, friendlyError, TodayMission, TodayResponse } from '@/lib/api';
 import { getStoredUserId } from '@/store/user';
@@ -29,6 +31,11 @@ export default function TodayScreen() {
   const [completingTask, setCompletingTask] = useState<string | null>(null);
 
   const isDa = course?.profession_slug === 'data_analyst';
+  const nextLesson = nextOpenLesson(course);
+  const totalLessons = course ? course.total_lessons || course.lessons.length || 0 : 0;
+  const doneLessons = course
+    ? course.lessons.filter((l) => l.status === 'completed').length
+    : 0;
 
   const load = useCallback(async () => {
     const uid = await getStoredUserId();
@@ -119,6 +126,79 @@ export default function TodayScreen() {
           />
         }>
         <View style={styles.column}>
+          <Card>
+            <View style={styles.cardStack}>
+              <View style={styles.planHead}>
+                <Icon name="cap" size={16} color={Palette.inkSoft} />
+                <ThemedText type="meta" themeColor="textSecondary">
+                  Активные курсы
+                </ThemedText>
+              </View>
+
+              {course ? (
+                <View style={styles.activeCourse}>
+                  <View style={styles.activeCourseHead}>
+                    <View style={styles.activeCourseCopy}>
+                      <ThemedText type="subtitle" numberOfLines={2}>
+                        {course.title}
+                      </ThemedText>
+                      <ThemedText type="meta" themeColor="textSecondary">
+                        {course.profession_title} · {course.level_title}
+                      </ThemedText>
+                    </View>
+                    <Badge
+                      label={
+                        course.generation_status === 'ready'
+                          ? 'В процессе'
+                          : course.generation_status === 'failed'
+                            ? 'Ошибка'
+                            : 'Сборка'
+                      }
+                      tone={
+                        course.generation_status === 'ready'
+                          ? 'brand'
+                          : course.generation_status === 'failed'
+                            ? 'warning'
+                            : 'neutral'
+                      }
+                    />
+                  </View>
+
+                  {totalLessons > 0 ? (
+                    <View style={styles.activeProgress}>
+                      <View style={styles.activeProgressRow}>
+                        <ThemedText type="meta" themeColor="textSecondary">
+                          {doneLessons} из {totalLessons} уроков
+                        </ThemedText>
+                        <ThemedText type="metaBold" style={styles.brandText}>
+                          {Math.round((doneLessons / totalLessons) * 100)}%
+                        </ThemedText>
+                      </View>
+                      <ProgressBar value={doneLessons} total={totalLessons} />
+                    </View>
+                  ) : null}
+
+                  <View style={styles.row}>
+                    <Button label="К программе" variant="secondary" onPress={() => router.push('/course')} />
+                    {nextLesson ? (
+                      <Button
+                        label="Продолжить"
+                        onPress={() => router.push(`/lesson/${nextLesson.id}`)}
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.cardStack}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Пока нет активного курса. Пройдите онбординг — соберём программу под цель.
+                  </ThemedText>
+                  <Button label="Начать" onPress={() => router.push('/onboarding')} />
+                </View>
+              )}
+            </View>
+          </Card>
+
           <Card>
             <View style={styles.cardStack}>
               <View style={styles.planHead}>
@@ -304,6 +384,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
+  activeCourse: {
+    width: '100%',
+    gap: Spacing.three,
+  },
+  activeCourseHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  activeCourseCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  activeProgress: {
+    gap: Spacing.two,
+  },
+  activeProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  brandText: { color: Palette.brand },
   adapt: { color: Palette.brandDeep },
   error: { color: Palette.danger },
   row: {

@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 import { Fonts, Palette, Radius, Spacing } from '@/constants/theme';
@@ -7,6 +7,24 @@ type Props = {
   content: string;
   emptyText?: string;
   bare?: boolean;
+};
+
+/**
+ * Library defaults merge in padding:10 on code_inline and flexDirection:row
+ * on paragraphs — on web that lifts code chips off the line. Override fully.
+ */
+const markdownRules = {
+  code_inline: (
+    node: { key: string; content: string },
+    _children: unknown,
+    _parent: unknown,
+    styles: Record<string, object>,
+    inheritedStyles: object = {}
+  ) => (
+    <Text key={node.key} style={[inheritedStyles, styles.code_inline]}>
+      {node.content}
+    </Text>
+  ),
 };
 
 export function MarkdownBody({
@@ -18,7 +36,9 @@ export function MarkdownBody({
 
   return (
     <View style={[bare ? styles.bare : styles.wrap, styles.base]}>
-      <Markdown style={markdownStyles}>{body}</Markdown>
+      <Markdown style={markdownStyles} rules={markdownRules} mergeStyle>
+        {body}
+      </Markdown>
     </View>
   );
 }
@@ -72,9 +92,15 @@ const markdownStyles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 4,
   },
+  // Kill default flexDirection:row / alignItems:flex-start that parks
+  // padded code chips on their own row above the sentence.
   paragraph: {
     marginTop: 0,
     marginBottom: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    width: '100%',
   },
   bullet_list: {
     marginBottom: 12,
@@ -83,7 +109,18 @@ const markdownStyles = StyleSheet.create({
     marginBottom: 12,
   },
   list_item: {
-    marginBottom: 4,
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  bullet_list_icon: {
+    marginLeft: 0,
+    marginRight: 8,
+    lineHeight: 24,
+  },
+  ordered_list_icon: {
+    marginLeft: 0,
+    marginRight: 8,
+    lineHeight: 24,
   },
   blockquote: {
     backgroundColor: Palette.surfaceAlt,
@@ -94,12 +131,26 @@ const markdownStyles = StyleSheet.create({
     marginBottom: 12,
   },
   code_inline: {
-    backgroundColor: Palette.surfaceAlt,
     color: Palette.ink,
     fontFamily: Fonts.mono as string,
-    borderRadius: 4,
-    paddingHorizontal: 4,
     fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: Palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Palette.line,
+    borderRadius: 4,
+    // Default lib style is padding: 10 — must zero it out or chips explode.
+    padding: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    ...Platform.select({
+      web: {
+        // Keep the chip in the text flow on RN Web.
+        display: 'inline' as unknown as undefined,
+        verticalAlign: 'middle' as unknown as undefined,
+      },
+      default: {},
+    }),
   },
   fence: {
     backgroundColor: Palette.surfaceAlt,
